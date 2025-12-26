@@ -1,0 +1,51 @@
+name: Build and Publish SQLite Extension
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build extension
+        run: cargo build --release -p absurd_sqlite_extension
+
+      - name: Package artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          EXTENSION_NAME=absurd
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            LIB="target/release/lib${EXTENSION_NAME}.dylib"
+          else
+            LIB="target/release/lib${EXTENSION_NAME}.so"
+          fi
+          if [[ ! -f "$LIB" ]]; then
+            echo "Expected extension at $LIB" >&2
+            ls -la target/release
+            exit 1
+          fi
+          EXT="${LIB##*.}"
+          TAG="${{ github.event.release.tag_name }}"
+          cp "$LIB" "dist/${EXTENSION_NAME}-${TAG}-${{ runner.os }}-${{ runner.arch }}.${EXT}"
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
