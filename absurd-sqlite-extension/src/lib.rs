@@ -36,7 +36,7 @@ fn absurd_create_queue(context: *mut sqlite3_context, values: &[*mut sqlite3_val
     Ok(())
 }
 
-fn absurd_delete_queue(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
+fn absurd_drop_queue(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let queue_name =
         sqlite_loadable::api::value_text_notnull(values.get(0).expect("queue_name is required"))?;
     validate::queue_name(queue_name)?;
@@ -56,7 +56,7 @@ fn absurd_init(db: *mut sqlite3) -> Result<()> {
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
     define_scalar_function(db, "absurd_version", 0, absurd_version, flags)?;
     define_scalar_function(db, "absurd_create_queue", 1, absurd_create_queue, flags)?;
-    define_scalar_function(db, "absurd_delete_queue", 1, absurd_delete_queue, flags)?;
+    define_scalar_function(db, "absurd_drop_queue", 1, absurd_drop_queue, flags)?;
     define_scalar_function(db, "absurd_complete_run", 3, run::absurd_complete_run, flags)?;
     define_scalar_function(db, "absurd_schedule_run", 3, run::absurd_schedule_run, flags)?;
     define_scalar_function(db, "absurd_fail_run", 3, run::absurd_fail_run_no_retry, flags)?;
@@ -270,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn test_delete_queue() {
+    fn test_drop_queue() {
         unsafe {
             sqlite3_auto_extension(Some(std::mem::transmute(
                 sqlite3_absurd_init as *const (),
@@ -287,7 +287,7 @@ mod tests {
             .unwrap();
 
         let deleted: i64 = conn
-            .query_row("select absurd_delete_queue('alpha')", [], |r| r.get(0))
+            .query_row("select absurd_drop_queue('alpha')", [], |r| r.get(0))
             .unwrap();
         assert_eq!(deleted, 1);
 
