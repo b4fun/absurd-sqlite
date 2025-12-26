@@ -43,7 +43,8 @@ jobs:
           fi
           EXT="${LIB##*.}"
           TAG="${{ github.event.release.tag_name }}"
-          cp "$LIB" "dist/${EXTENSION_NAME}-${TAG}-${{ runner.os }}-${{ runner.arch }}.${EXT}"
+          SAFE_TAG="${TAG//\//-}"
+          cp "$LIB" "dist/${EXTENSION_NAME}-${SAFE_TAG}-${{ runner.os }}-${{ runner.arch }}.${EXT}"
 
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
