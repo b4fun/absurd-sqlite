@@ -1,5 +1,6 @@
 use sqlite_loadable::prelude::*;
-use sqlite_loadable::{define_scalar_function, define_table_function, FunctionFlags, Result};
+use sqlite_loadable::exec::Statement;
+use sqlite_loadable::{define_scalar_function, define_table_function, Error, FunctionFlags, Result};
 
 mod spawn;
 mod claim;
@@ -52,7 +53,15 @@ fn absurd_drop_queue(context: *mut sqlite3_context, values: &[*mut sqlite3_value
     Ok(())
 }
 
+const MIN_JSONB_VERSION: (i32, i32, i32) = (3, 45, 0);
+
 fn absurd_init(db: *mut sqlite3) -> Result<()> {
+    let version = fetch_sqlite_version(db)?;
+    if version < MIN_JSONB_VERSION {
+        return Err(Error::new_message(
+            "jsonb() requires SQLite 3.45.0+; please upgrade SQLite",
+        ));
+    }
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
     define_scalar_function(db, "absurd_version", 0, absurd_version, flags)?;
     define_scalar_function(db, "absurd_create_queue", 1, absurd_create_queue, flags)?;
@@ -120,6 +129,40 @@ fn absurd_init(db: *mut sqlite3) -> Result<()> {
     define_table_function::<queue::ListQueuesTable>(db, "absurd_list_queues", None)?;
     define_table_function::<migrate::MigrationRecordsTable>(db, "absurd_migration_records", None)?;
     Ok(())
+}
+
+fn fetch_sqlite_version(db: *mut sqlite3) -> Result<(i32, i32, i32)> {
+    let mut stmt = Statement::prepare(db, "select sqlite_version()")
+        .map_err(|_| Error::new_message("failed to query sqlite_version()"))?;
+    let mut rows = stmt.execute();
+    let row = match rows.next() {
+        Some(Ok(row)) => row,
+        _ => return Err(Error::new_message("failed to read sqlite_version()")),
+    };
+    let version = row
+        .get::<String>(0)
+        .map_err(|_| Error::new_message("failed to parse sqlite_version()"))?;
+    parse_sqlite_version(&version)
+}
+
+fn parse_sqlite_version(version: &str) -> Result<(i32, i32, i32)> {
+    let mut parts = version.split('.');
+    let major = parts
+        .next()
+        .ok_or_else(|| Error::new_message("invalid sqlite_version() format"))?
+        .parse::<i32>()
+        .map_err(|_| Error::new_message("invalid sqlite_version() major value"))?;
+    let minor = parts
+        .next()
+        .ok_or_else(|| Error::new_message("invalid sqlite_version() format"))?
+        .parse::<i32>()
+        .map_err(|_| Error::new_message("invalid sqlite_version() minor value"))?;
+    let patch = parts
+        .next()
+        .unwrap_or("0")
+        .parse::<i32>()
+        .map_err(|_| Error::new_message("invalid sqlite_version() patch value"))?;
+    Ok((major, minor, patch))
 }
 
 #[sqlite_entrypoint]
