@@ -10,6 +10,7 @@ mod event;
 mod sql;
 mod migrate;
 mod migrations;
+mod queue;
 mod settings;
 mod validate;
 
@@ -35,10 +36,27 @@ fn absurd_create_queue(context: *mut sqlite3_context, values: &[*mut sqlite3_val
     Ok(())
 }
 
+fn absurd_delete_queue(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
+    let queue_name =
+        sqlite_loadable::api::value_text_notnull(values.get(0).expect("queue_name is required"))?;
+    validate::queue_name(queue_name)?;
+
+    let db = sqlite_loadable::api::context_db_handle(context);
+    sql::exec_with_bind_text(
+        db,
+        "delete from absurd_queues where queue_name = ?1",
+        &[queue_name],
+    )?;
+    let changes = sql::query_row_i64(db, "select changes()", &[])?;
+    sqlite_loadable::api::result_int64(context, changes);
+    Ok(())
+}
+
 fn absurd_init(db: *mut sqlite3) -> Result<()> {
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
     define_scalar_function(db, "absurd_version", 0, absurd_version, flags)?;
     define_scalar_function(db, "absurd_create_queue", 1, absurd_create_queue, flags)?;
+    define_scalar_function(db, "absurd_delete_queue", 1, absurd_delete_queue, flags)?;
     define_scalar_function(db, "absurd_complete_run", 3, run::absurd_complete_run, flags)?;
     define_scalar_function(db, "absurd_schedule_run", 3, run::absurd_schedule_run, flags)?;
     define_scalar_function(db, "absurd_fail_run", 3, run::absurd_fail_run_no_retry, flags)?;
@@ -99,6 +117,7 @@ fn absurd_init(db: *mut sqlite3) -> Result<()> {
         None,
     )?;
     define_table_function::<event::AwaitEventTable>(db, "absurd_await_event", None)?;
+    define_table_function::<queue::ListQueuesTable>(db, "absurd_list_queues", None)?;
     define_table_function::<migrate::MigrationRecordsTable>(db, "absurd_migration_records", None)?;
     Ok(())
 }
@@ -218,6 +237,64 @@ mod tests {
             .query_row("select absurd_apply_migrations(1)", [], |row| row.get(0))
             .unwrap();
         assert_eq!(applied, 1);
+    }
+
+    #[test]
+    fn test_list_queues() {
+        unsafe {
+            sqlite3_auto_extension(Some(std::mem::transmute(
+                sqlite3_absurd_init as *const (),
+            )));
+        }
+
+        let conn = Connection::open_in_memory().unwrap();
+        let _: i64 = conn
+            .query_row("select absurd_apply_migrations()", [], |row| row.get(0))
+            .unwrap();
+
+        let _: i64 = conn
+            .query_row("select absurd_create_queue('alpha')", [], |r| r.get(0))
+            .unwrap();
+        let _: i64 = conn
+            .query_row("select absurd_create_queue('beta')", [], |r| r.get(0))
+            .unwrap();
+
+        let mut stmt = conn
+            .prepare("select queue_name from absurd_list_queues() order by queue_name")
+            .unwrap();
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap();
+        let queues: Vec<String> = rows.map(|row| row.unwrap()).collect();
+        assert_eq!(queues, vec!["alpha".to_string(), "beta".to_string()]);
+    }
+
+    #[test]
+    fn test_delete_queue() {
+        unsafe {
+            sqlite3_auto_extension(Some(std::mem::transmute(
+                sqlite3_absurd_init as *const (),
+            )));
+        }
+
+        let conn = Connection::open_in_memory().unwrap();
+        let _: i64 = conn
+            .query_row("select absurd_apply_migrations()", [], |row| row.get(0))
+            .unwrap();
+
+        let _: i64 = conn
+            .query_row("select absurd_create_queue('alpha')", [], |r| r.get(0))
+            .unwrap();
+
+        let deleted: i64 = conn
+            .query_row("select absurd_delete_queue('alpha')", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(deleted, 1);
+
+        let count: i64 = conn
+            .query_row("select count(*) from absurd_queues", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
     }
 
     #[test]
@@ -449,6 +526,10 @@ mod tests {
         assert_eq!(await_event.get("step_name").unwrap(), "TEXT");
         assert_eq!(await_event.get("event_name").unwrap(), "TEXT");
         assert_eq!(await_event.get("timeout").unwrap(), "INTEGER");
+
+        let queues = table_column_types(&conn, "absurd_list_queues");
+        assert_eq!(queues.get("queue_name").unwrap(), "TEXT");
+        assert_eq!(queues.get("created_at").unwrap(), "INTEGER");
 
         let checkpoint_one = table_column_types(&conn, "absurd_get_task_checkpoint_state");
         assert_eq!(checkpoint_one.get("checkpoint_name").unwrap(), "TEXT");
