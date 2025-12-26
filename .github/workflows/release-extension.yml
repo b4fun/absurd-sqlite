@@ -10,6 +10,7 @@ permissions:
 jobs:
   build-and-upload:
     name: Build (${{ matrix.os }})
+    if: startsWith(github.event.release.tag_name, 'absurd-sqlite-extension/')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
