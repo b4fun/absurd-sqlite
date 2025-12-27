@@ -1,156 +1,107 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
+  import { mockAbsurdProvider } from "$lib/providers/absurdData";
 
-  let name = $state("");
-  let greetMsg = $state("");
+  const overview = mockAbsurdProvider.getOverviewMetrics();
+  const queueMetrics = mockAbsurdProvider.getQueueMetrics();
+  const handleRefresh = () => {
+    window.location.reload();
+  };
 
-  async function greet(event: Event) {
-    event.preventDefault();
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsg = await invoke("greet", { name });
-  }
+  const statCards = [
+    {
+      label: "Active queues",
+      value: overview.activeQueues,
+      description: "Queues with registered metrics",
+    },
+    {
+      label: "Messages processed",
+      value: overview.messagesProcessed,
+      description: "Total messages the queues have seen",
+    },
+    {
+      label: "Messages in queue",
+      value: overview.messagesInQueue,
+      description: "Unclaimed messages in queue storage",
+    },
+    {
+      label: "Visible right now",
+      value: overview.visibleNow,
+      description: "Ready for immediate consumption",
+    },
+  ];
 </script>
 
-<main class="container">
-  <h1 class="text-3xl font-bold underline mb-2">Welcome to Tauri + Svelte...</h1>
-
-  <div class="row">
-    <a href="https://vite.dev" target="_blank">
-      <img src="/vite.svg" class="logo vite" alt="Vite Logo" />
-    </a>
-    <a href="https://tauri.app" target="_blank">
-      <img src="/tauri.svg" class="logo tauri" alt="Tauri Logo" />
-    </a>
-    <a href="https://svelte.dev" target="_blank">
-      <img src="/svelte.svg" class="logo svelte-kit" alt="SvelteKit Logo" />
-    </a>
+<section class="flex flex-wrap items-start justify-between gap-4">
+  <div>
+    <h1 class="text-3xl font-semibold text-slate-900">Overview</h1>
+    <p class="mt-1 text-sm text-slate-600">
+      Current queue health across your Absurd installation.
+    </p>
   </div>
-  <p>Click on the Tauri, Vite, and SvelteKit logos to learn more...</p>
+  <button
+    type="button"
+    class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:cursor-pointer"
+    on:click={handleRefresh}
+  >
+    Refresh
+  </button>
+</section>
 
-  <form class="row" onsubmit={greet}>
-    <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
-    <button type="submit">Greet</button>
-  </form>
-  <p>{greetMsg}</p>
-</main>
+<section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+  {#each statCards as card}
+    <div class="rounded-lg border border-black/10 bg-white p-4">
+      <p class="text-sm font-medium text-slate-700">{card.label}</p>
+      <p class="mt-3 text-3xl font-semibold text-slate-900">{card.value}</p>
+      <p class="mt-2 text-sm text-slate-500">{card.description}</p>
+    </div>
+  {/each}
+</section>
 
-<style>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
+<section class="mt-8 rounded-lg border border-black/10 bg-white p-6">
+  <div>
+    <h2 class="text-2xl font-semibold text-slate-900">Queue metrics</h2>
+    <p class="mt-1 text-sm text-slate-500">
+      Visibility into backlog depth and message freshness.
+    </p>
+  </div>
 
-.logo.svelte-kit:hover {
-  filter: drop-shadow(0 0 2em #ff3e00);
-}
-
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
-}
-
-</style>
+  <div class="mt-6 overflow-hidden rounded-lg border border-black/10">
+    <table class="min-w-full border-collapse text-left text-sm">
+      <thead class="bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-600">
+        <tr>
+          <th class="px-4 py-3">Queue</th>
+          <th class="px-4 py-3">In Queue</th>
+          <th class="px-4 py-3">Visible</th>
+          <th class="px-4 py-3">Newest age</th>
+          <th class="px-4 py-3">Oldest age</th>
+          <th class="px-4 py-3">Total seen</th>
+          <th class="px-4 py-3">Scraped</th>
+          <th class="px-4 py-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white">
+        {#each queueMetrics as metric}
+          <tr class="border-t border-black/5">
+            <td class="px-4 py-3 font-medium text-slate-900">{metric.name}</td>
+            <td class="px-4 py-3 text-slate-600">{metric.inQueue}</td>
+            <td class="px-4 py-3 text-slate-600">{metric.visible}</td>
+            <td class="px-4 py-3 text-slate-600">{metric.newestAge}</td>
+            <td class="px-4 py-3 text-slate-600">{metric.oldestAge}</td>
+            <td class="px-4 py-3 text-slate-600">{metric.totalSeen}</td>
+            <td class="px-4 py-3 text-slate-600">{metric.scrapedAt}</td>
+            <td class="px-4 py-3 text-slate-600">
+              <div class="flex items-center gap-2">
+                <a class="text-sm text-slate-700" href="/tasks">
+                  Tasks →
+                </a>
+                <a class="text-sm text-slate-700" href="/events">
+                  Events →
+                </a>
+              </div>
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+</section>
