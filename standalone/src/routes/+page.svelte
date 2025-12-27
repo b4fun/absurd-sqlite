@@ -12,7 +12,7 @@
 </script>
 
 <main class="container">
-  <h1>Welcome to Tauri + Svelte...</h1>
+  <h1 class="text-3xl font-bold underline mb-2">Welcome to Tauri + Svelte...</h1>
 
   <div class="row">
     <a href="https://vite.dev" target="_blank">
