@@ -10,8 +10,8 @@
   const allQueuesLabel = "All queues";
   let queueOptions = $state<string[]>([]);
   const urlQueue = $derived(page.url.searchParams.get("queue") ?? allQueuesLabel);
-  let selectedQueue = $state(urlQueue);
-  let lastUrlQueue = $state(urlQueue);
+  let selectedQueue = $state(allQueuesLabel);
+  let lastUrlQueue = $state(allQueuesLabel);
   let taskRuns = $state<TaskRun[]>([]);
   let expandedId = $state<string | null>(null);
   let isReady = $state(false);

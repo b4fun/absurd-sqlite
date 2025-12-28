@@ -10,6 +10,8 @@
     class?: string;
     type?: "button" | "submit" | "reset";
     disabled?: boolean;
+    onclick?: (event: MouseEvent) => void;
+    [key: string]: unknown;
   }>();
 
   const classes = $derived(["cursor-pointer", className].filter(Boolean).join(" "));
