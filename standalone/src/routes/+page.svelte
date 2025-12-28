@@ -116,10 +116,10 @@
             <td class="px-4 py-3 text-slate-600">{metric.scrapedAt}</td>
             <td class="px-4 py-3 text-slate-600">
               <div class="flex items-center gap-2">
-                <a class="text-sm text-slate-700" href="/tasks">
+                <a class="text-sm text-slate-700" href={`/tasks?queue=${metric.name}`}>
                   Tasks →
                 </a>
-                <a class="text-sm text-slate-700" href="/events">
+                <a class="text-sm text-slate-700" href={`/events?queue=${metric.name}`}>
                   Events →
                 </a>
               </div>
