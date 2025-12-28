@@ -27,4 +27,8 @@ anyhow = "1.0.100"
 tauri-plugin-log = "2"
 log = "0.4.29"
 tokio = "1.48.0"
+rusqlite = { version = "0.38.0", features = ["bundled", "load_extension"] }
+tauri-plugin-fs = "2"
 
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-cli = "2"

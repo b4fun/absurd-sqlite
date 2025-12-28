@@ -16,7 +16,7 @@ sqlite3ext-sys = "0.0.1"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 [dev-dependencies]
-rusqlite = { version = "0.36", features = ["load_extension", "bundled"] }
+rusqlite = { version = "0.38", features = ["load_extension", "bundled"] }
 
 [profile.release]
 codegen-units = 1

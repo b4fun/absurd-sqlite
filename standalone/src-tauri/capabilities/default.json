@@ -9,6 +9,7 @@
     "core:default",
     "opener:default",
     "shell:default",
-    "log:default"
+    "log:default",
+    "fs:default"
   ]
 }
