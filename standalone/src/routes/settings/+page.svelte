@@ -34,6 +34,10 @@
   const hasPendingMigrations = $derived(
     migrations.some((migration) => migration.status === "pending"),
   );
+  const canCopyPath = $derived(
+    data.dbPath !== "--" && data.dbPath.trim().length > 0,
+  );
+  let copyStatus = $state<"idle" | "copied" | "error">("idle");
 
   const refreshData = async () => {
     settings = await provider.getSettingsInfo();
@@ -52,6 +56,23 @@
   const handleApplyMigration = async (migrationId: number) => {
     await provider.applyMigration(migrationId);
     await refreshData();
+  };
+
+  const handleCopyPath = async () => {
+    if (!canCopyPath) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(data.dbPath);
+      copyStatus = "copied";
+    } catch {
+      copyStatus = "error";
+    }
+
+    setTimeout(() => {
+      copyStatus = "idle";
+    }, 2000);
   };
 
   onMount(() => {
@@ -96,7 +117,21 @@
     <p class="mt-1 text-sm text-slate-500">Primary storage location for task data.</p>
     <dl class="mt-4 space-y-3 text-sm">
       <div class="space-y-2">
-        <dt class="text-slate-500">File path</dt>
+        <div class="flex items-center justify-between gap-3">
+          <dt class="text-slate-500">File path</dt>
+          <Button
+            type="button"
+            class="rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!canCopyPath}
+            onclick={handleCopyPath}
+          >
+            {copyStatus === "copied"
+              ? "Copied"
+              : copyStatus === "error"
+                ? "Copy failed"
+                : "Copy"}
+          </Button>
+        </div>
         <dd class="break-all rounded-md border border-black/10 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700">
           {data.dbPath}
         </dd>
