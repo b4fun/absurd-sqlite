@@ -2,6 +2,7 @@
   import { page } from "$app/state";
   import { onMount } from "svelte";
   import Button from "$lib/components/Button.svelte";
+  import JsonBlock from "$lib/components/JsonBlock.svelte";
   import { getAbsurdProvider, type TaskRun } from "$lib/providers/absurdData";
 
   const provider = getAbsurdProvider();
@@ -134,23 +135,17 @@
           <div><span class="text-slate-400">Updated:</span> {run.updatedAgo}</div>
         </div>
 
-        <div class="mt-4 rounded-md border border-black/10">
-          <div class="flex items-center justify-between border-b border-black/10 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-            <span>Parameters</span>
-            <Button type="button" class="hover:text-slate-700">Copy</Button>
-          </div>
-          <pre class="whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">{run.paramsJson || "{}"}</pre>
+        <div class="mt-4">
+          <JsonBlock title="Parameters" value={run.paramsJson} emptyText={"{}"} />
         </div>
 
-        {#if run.finalStateJson}
-          <div class="mt-3 rounded-md border border-black/10">
-            <div class="flex items-center justify-between border-b border-black/10 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-              <span>Final State</span>
-              <Button type="button" class="hover:text-slate-700">Copy</Button>
-            </div>
-            <pre class="whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">{run.finalStateJson}</pre>
-          </div>
-        {/if}
+        <div class="mt-3">
+          <JsonBlock
+            title="Final State"
+            value={run.finalStateJson}
+            emptyText="No final state yet."
+          />
+        </div>
       </article>
     {/each}
   {/if}

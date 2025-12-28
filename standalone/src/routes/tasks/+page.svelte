@@ -3,6 +3,7 @@
   import { page } from "$app/state";
   import { onMount } from "svelte";
   import Button from "$lib/components/Button.svelte";
+  import JsonBlock from "$lib/components/JsonBlock.svelte";
   import SelectField from "$lib/components/SelectField.svelte";
   import { getAbsurdProvider, type TaskRun } from "$lib/providers/absurdData";
 
@@ -42,17 +43,6 @@
       activeSearch = nextSearch;
       updateQuery({ q: nextSearch || null });
     }, 200);
-  };
-  const formatJsonBlock = (value: string | null | undefined) => {
-    if (!value) return "";
-    const trimmed = value.trim();
-    if (!trimmed) return "";
-    try {
-      const parsed = JSON.parse(trimmed);
-      return JSON.stringify(parsed, null, 2);
-    } catch {
-      return trimmed;
-    }
   };
   const currentStatusByTaskId = $derived(
     taskRuns.reduce<Record<string, { status: TaskRun["status"]; attemptNumber: number }>>(
@@ -337,30 +327,16 @@
                   </dl>
                 </div>
 
-                <div class="mt-4 rounded-md border border-black/10">
-                  <div class="flex items-center justify-between border-b border-black/10 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                    <span>Parameters</span>
-                    <Button type="button" class="hover:text-slate-700">Copy</Button>
-                  </div>
-                  <pre class="whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">
-{formatJsonBlock(run.paramsJson) || "{}"}
-                  </pre>
+                <div class="mt-4">
+                  <JsonBlock title="Parameters" value={run.paramsJson} emptyText={"{}"} />
                 </div>
 
-                <div class="mt-3 rounded-md border border-black/10">
-                  <div class="flex items-center justify-between border-b border-black/10 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                    <span>Final State</span>
-                    <Button type="button" class="hover:text-slate-700">Copy</Button>
-                  </div>
-                  {#if formatJsonBlock(run.finalStateJson)}
-                    <pre class="whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">
-{formatJsonBlock(run.finalStateJson)}
-                    </pre>
-                  {:else}
-                    <div class="bg-white px-3 py-3 text-xs text-slate-500">
-                      No final state yet.
-                    </div>
-                  {/if}
+                <div class="mt-3">
+                  <JsonBlock
+                    title="Final State"
+                    value={run.finalStateJson}
+                    emptyText="No final state yet."
+                  />
                 </div>
               </td>
             </tr>
