@@ -1,9 +1,12 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { mockAbsurdProvider, type TaskRun } from "$lib/providers/absurdData";
+  import { onMount } from "svelte";
+  import { getAbsurdProvider, type TaskRun } from "$lib/providers/absurdData";
 
+  const provider = getAbsurdProvider();
   const taskId = $derived(page.params.taskId ?? "");
-  const runs = $derived(mockAbsurdProvider.getTaskHistory(taskId));
+  let runs = $state<TaskRun[]>([]);
+  let isReady = $state(false);
   const sortedRuns = $derived([...runs].sort((a, b) => b.attemptNumber - a.attemptNumber));
   const taskName = $derived(runs[0]?.name ?? "Unknown");
   const queueName = $derived(runs[0]?.queue ?? "default");
@@ -19,7 +22,25 @@
     completed: "border-slate-200 bg-slate-100 text-slate-700",
     sleeping: "border-amber-200 bg-amber-50 text-amber-700",
     pending: "border-sky-200 bg-sky-50 text-sky-700",
+    cancelled: "border-zinc-200 bg-zinc-50 text-zinc-600",
   };
+
+  const refreshRuns = async () => {
+    if (!taskId) {
+      runs = [];
+      return;
+    }
+    runs = await provider.getTaskHistory(taskId);
+  };
+
+  $effect(() => {
+    if (!isReady) return;
+    void refreshRuns();
+  });
+
+  onMount(() => {
+    isReady = true;
+  });
 </script>
 
 <section class="flex flex-wrap items-start justify-between gap-4">
@@ -40,7 +61,7 @@
     <button
       type="button"
       class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:cursor-pointer"
-      onclick={() => window.location.reload()}
+      onclick={() => void refreshRuns()}
     >
       Refresh
     </button>

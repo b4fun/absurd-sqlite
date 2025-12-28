@@ -19,7 +19,7 @@ export type TaskRun = {
   id: string;
   name: string;
   queue: string;
-  status: "running" | "failed" | "completed" | "sleeping" | "pending";
+  status: "running" | "failed" | "completed" | "sleeping" | "pending" | "cancelled";
   attempt: string;
   attemptNumber: number;
   runId: string;
@@ -59,28 +59,54 @@ export type EventEntry = {
 };
 
 export type AbsurdDataProvider = {
-  getOverviewMetrics: () => OverviewMetrics;
-  getQueueMetrics: () => QueueMetric[];
-  getTaskRuns: () => TaskRun[];
-  getTaskRunsForQueue: (queueName: string) => TaskRun[];
-  getTaskHistory: (taskId: string) => TaskRun[];
-  getQueueNames: () => string[];
-  getQueueSummaries: () => QueueSummary[];
-  getEventFilterDefaults: (queueName?: string) => EventFilterDefaults;
-  getEvents: () => EventEntry[];
-  getFilteredEvents: (filters: { queueName?: string; eventName?: string }) => EventEntry[];
+  getOverviewMetrics: () => Promise<OverviewMetrics>;
+  getQueueMetrics: () => Promise<QueueMetric[]>;
+  getTaskRuns: () => Promise<TaskRun[]>;
+  getTaskRunsForQueue: (queueName: string) => Promise<TaskRun[]>;
+  getTaskHistory: (taskId: string) => Promise<TaskRun[]>;
+  getQueueNames: () => Promise<string[]>;
+  getQueueSummaries: () => Promise<QueueSummary[]>;
+  getEventFilterDefaults: (queueName?: string) => Promise<EventFilterDefaults>;
+  getEvents: () => Promise<EventEntry[]>;
+  getFilteredEvents: (filters: { queueName?: string; eventName?: string }) => Promise<EventEntry[]>;
 };
 
+const isTauriRuntime = () =>
+  typeof window !== "undefined" && Boolean((window as { __TAURI__?: unknown }).__TAURI__);
+
+const tauriInvoke = async <T>(command: string, args?: Record<string, unknown>): Promise<T> => {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<T>(command, args);
+};
+
+export const tauriAbsurdProvider: AbsurdDataProvider = {
+  getOverviewMetrics: () => tauriInvoke("get_overview_metrics"),
+  getQueueMetrics: () => tauriInvoke("get_queue_metrics"),
+  getTaskRuns: () => tauriInvoke("get_task_runs"),
+  getTaskRunsForQueue: (queueName) =>
+    tauriInvoke("get_task_runs_for_queue", { queue_name: queueName }),
+  getTaskHistory: (taskId) => tauriInvoke("get_task_history", { task_id: taskId }),
+  getQueueNames: () => tauriInvoke("get_queue_names"),
+  getQueueSummaries: () => tauriInvoke("get_queue_summaries"),
+  getEventFilterDefaults: (queueName) =>
+    tauriInvoke("get_event_filter_defaults", queueName ? { queue_name: queueName } : undefined),
+  getEvents: () => tauriInvoke("get_events"),
+  getFilteredEvents: (filters) => tauriInvoke("get_filtered_events", { filters }),
+};
+
+export const getAbsurdProvider = (): AbsurdDataProvider =>
+  isTauriRuntime() ? tauriAbsurdProvider : mockAbsurdProvider;
+
 export const mockAbsurdProvider: AbsurdDataProvider = {
-  getQueueNames: () =>
-    mockAbsurdProvider.getQueueSummaries().map((queue) => queue.name),
-  getOverviewMetrics: () => ({
+  getQueueNames: async () =>
+    (await mockAbsurdProvider.getQueueSummaries()).map((queue) => queue.name),
+  getOverviewMetrics: async () => ({
     activeQueues: 1,
     messagesProcessed: 0,
     messagesInQueue: 0,
     visibleNow: 0,
   }),
-  getQueueMetrics: () => [
+  getQueueMetrics: async () => [
     {
       name: "test",
       inQueue: 0,
@@ -91,7 +117,7 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
       scrapedAt: "Dec 27, 2025, 2:48:45 PM",
     },
   ],
-  getTaskRuns: () => [
+  getTaskRuns: async () => [
     {
       id: "019b470c-a9e6-70c7-aba8-d57f79368ba2",
       name: "test",
@@ -220,15 +246,13 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
       worker: "mordor.local:99210",
     },
   ],
-  getTaskRunsForQueue: (queueName: string) =>
+  getTaskRunsForQueue: async (queueName: string) =>
     queueName === "All queues"
       ? mockAbsurdProvider.getTaskRuns()
-      : mockAbsurdProvider.getTaskRuns().filter((run) => run.queue === queueName),
-  getTaskHistory: (taskId: string) =>
-    mockAbsurdProvider
-      .getTaskRuns()
-      .filter((run) => run.id === taskId),
-  getQueueSummaries: () => [
+      : (await mockAbsurdProvider.getTaskRuns()).filter((run) => run.queue === queueName),
+  getTaskHistory: async (taskId: string) =>
+    (await mockAbsurdProvider.getTaskRuns()).filter((run) => run.id === taskId),
+  getQueueSummaries: async () => [
     {
       name: "default",
       createdAt: "Created Dec 19, 2025, 5:25 PM",
@@ -256,12 +280,12 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
       ],
     },
   ],
-  getEventFilterDefaults: (queueName?: string) => ({
+  getEventFilterDefaults: async (queueName?: string) => ({
     eventNamePlaceholder: "payment.completed",
     queueLabel: queueName ?? "All queues",
-    queueOptions: ["All queues", ...mockAbsurdProvider.getQueueNames()],
+    queueOptions: ["All queues", ...(await mockAbsurdProvider.getQueueNames())],
   }),
-  getEvents: () => [
+  getEvents: async () => [
     {
       id: "evt_019b4714",
       name: "task.started",
@@ -284,10 +308,11 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
       payloadPreview: "{ \"taskId\": \"019b470c-246b\", \"attempt\": 1 }",
     },
   ],
-  getFilteredEvents: ({ queueName, eventName }) => {
+  getFilteredEvents: async ({ queueName, eventName }) => {
     const normalizedQueue = (queueName ?? "All queues").toLowerCase();
     const normalizedEventName = (eventName ?? "").trim().toLowerCase();
-    return mockAbsurdProvider.getEvents().filter((event) => {
+    const events = await mockAbsurdProvider.getEvents();
+    return events.filter((event) => {
       const queueMatch =
         normalizedQueue === "all queues" || event.queue.toLowerCase() === normalizedQueue;
       const nameMatch =

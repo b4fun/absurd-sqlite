@@ -12,14 +12,15 @@
   "app": {
     "windows": [
       {
-        "title": "Absurd Sqlite",
-        "width": 800,
-        "height": 600
+        "title": "Absurd SQLite",
+        "width": 1075,
+        "height": 800
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
@@ -34,7 +35,7 @@
   },
   "plugins": {
     "cli": {
-      "description": "Absurd Sqlite",
+      "description": "Absurd SQLite",
       "args": [
         {
           "name": "db",

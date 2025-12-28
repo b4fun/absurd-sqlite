@@ -1,23 +1,29 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
+  import { onMount } from "svelte";
   import SelectField from "$lib/components/SelectField.svelte";
-  import { mockAbsurdProvider } from "$lib/providers/absurdData";
+  import {
+    getAbsurdProvider,
+    type EventEntry,
+    type EventFilterDefaults,
+  } from "$lib/providers/absurdData";
 
+  const provider = getAbsurdProvider();
   const allQueuesLabel = "All queues";
   const urlQueue = $derived(page.url.searchParams.get("queue") ?? allQueuesLabel);
   const urlEventName = $derived(page.url.searchParams.get("eventName") ?? "");
-  let selectedQueue = $state(urlQueue);
-  let eventNameQuery = $state(urlEventName);
-  let lastUrlQueue = $state(urlQueue);
-  let lastUrlEventName = $state(urlEventName);
-  const filters = $derived(mockAbsurdProvider.getEventFilterDefaults(selectedQueue));
-  const filteredEvents = $derived(
-    mockAbsurdProvider.getFilteredEvents({
-      queueName: selectedQueue,
-      eventName: eventNameQuery,
-    })
-  );
+  let selectedQueue = $state(allQueuesLabel);
+  let eventNameQuery = $state("");
+  let lastUrlQueue = $state("");
+  let lastUrlEventName = $state("");
+  let isReady = $state(false);
+  let filters = $state<EventFilterDefaults>({
+    eventNamePlaceholder: "payment.completed",
+    queueLabel: allQueuesLabel,
+    queueOptions: [allQueuesLabel],
+  });
+  let filteredEvents = $state<EventEntry[]>([]);
 
   const updateQuery = (updates: Record<string, string | null>) => {
     const url = new URL(page.url);
@@ -56,8 +62,30 @@
     });
   });
   const handleRefresh = () => {
-    window.location.reload();
+    void refreshFilters();
+    void refreshEvents();
   };
+
+  const refreshFilters = async () => {
+    filters = await provider.getEventFilterDefaults(selectedQueue);
+  };
+
+  const refreshEvents = async () => {
+    filteredEvents = await provider.getFilteredEvents({
+      queueName: selectedQueue,
+      eventName: eventNameQuery,
+    });
+  };
+
+  $effect(() => {
+    if (!isReady) return;
+    void refreshFilters();
+    void refreshEvents();
+  });
+
+  onMount(() => {
+    isReady = true;
+  });
 </script>
 
 <section class="flex flex-wrap items-start justify-between gap-4">

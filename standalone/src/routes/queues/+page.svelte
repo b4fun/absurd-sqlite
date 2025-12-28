@@ -1,10 +1,20 @@
 <script lang="ts">
-  import { mockAbsurdProvider } from "$lib/providers/absurdData";
+  import { onMount } from "svelte";
+  import { getAbsurdProvider, type QueueSummary } from "$lib/providers/absurdData";
 
-  const queueSummaries = mockAbsurdProvider.getQueueSummaries();
-  const handleRefresh = () => {
-    window.location.reload();
+  const provider = getAbsurdProvider();
+  let queueSummaries = $state<QueueSummary[]>([]);
+  const refreshData = async () => {
+    queueSummaries = await provider.getQueueSummaries();
   };
+
+  const handleRefresh = () => {
+    void refreshData();
+  };
+
+  onMount(() => {
+    void refreshData();
+  });
 </script>
 
 <section class="flex flex-wrap items-start justify-between gap-4">

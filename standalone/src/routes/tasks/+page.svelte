@@ -1,31 +1,37 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
+  import { onMount } from "svelte";
   import SelectField from "$lib/components/SelectField.svelte";
-  import { mockAbsurdProvider, type TaskRun } from "$lib/providers/absurdData";
+  import { getAbsurdProvider, type TaskRun } from "$lib/providers/absurdData";
 
+  const provider = getAbsurdProvider();
   const allQueuesLabel = "All queues";
-  const queueOptions = mockAbsurdProvider.getQueueNames();
+  let queueOptions = $state<string[]>([]);
   const urlQueue = $derived(page.url.searchParams.get("queue") ?? allQueuesLabel);
   let selectedQueue = $state(urlQueue);
   let lastUrlQueue = $state(urlQueue);
-  const taskRuns = $derived(mockAbsurdProvider.getTaskRunsForQueue(selectedQueue));
+  let taskRuns = $state<TaskRun[]>([]);
   let expandedId = $state<string | null>(null);
+  let isReady = $state(false);
   const handleRefresh = () => {
-    window.location.reload();
+    void refreshTaskRuns();
   };
   const toggleExpanded = (runId: string) => {
     expandedId = expandedId === runId ? null : runId;
   };
-  const currentStatusByTaskId = taskRuns.reduce<
-    Record<string, { status: TaskRun["status"]; attemptNumber: number }>
-  >((acc, run) => {
-    const existing = acc[run.id];
-    if (!existing || run.attemptNumber > existing.attemptNumber) {
-      acc[run.id] = { status: run.status, attemptNumber: run.attemptNumber };
-    }
-    return acc;
-  }, {});
+  const currentStatusByTaskId = $derived(
+    taskRuns.reduce<Record<string, { status: TaskRun["status"]; attemptNumber: number }>>(
+      (acc, run) => {
+        const existing = acc[run.id];
+        if (!existing || run.attemptNumber > existing.attemptNumber) {
+          acc[run.id] = { status: run.status, attemptNumber: run.attemptNumber };
+        }
+        return acc;
+      },
+      {}
+    )
+  );
 
   const updateQuery = (updates: Record<string, string | null>) => {
     const url = new URL(page.url);
@@ -61,7 +67,25 @@
     completed: "border-slate-200 bg-slate-100 text-slate-700",
     sleeping: "border-amber-200 bg-amber-50 text-amber-700",
     pending: "border-sky-200 bg-sky-50 text-sky-700",
+    cancelled: "border-zinc-200 bg-zinc-50 text-zinc-600",
   };
+
+  const refreshTaskRuns = async () => {
+    taskRuns =
+      selectedQueue === allQueuesLabel
+        ? await provider.getTaskRuns()
+        : await provider.getTaskRunsForQueue(selectedQueue);
+  };
+
+  $effect(() => {
+    if (!isReady) return;
+    void refreshTaskRuns();
+  });
+
+  onMount(async () => {
+    queueOptions = await provider.getQueueNames();
+    isReady = true;
+  });
 </script>
 
 <section class="flex flex-wrap items-start justify-between gap-4">

@@ -1,34 +1,58 @@
 <script lang="ts">
-  import { mockAbsurdProvider } from "$lib/providers/absurdData";
+  import { onMount } from "svelte";
+  import {
+    getAbsurdProvider,
+    type OverviewMetrics,
+    type QueueMetric,
+  } from "$lib/providers/absurdData";
 
-  const overview = mockAbsurdProvider.getOverviewMetrics();
-  const queueMetrics = mockAbsurdProvider.getQueueMetrics();
-  const handleRefresh = () => {
-    window.location.reload();
+  const provider = getAbsurdProvider();
+  const overviewDefaults: OverviewMetrics = {
+    activeQueues: 0,
+    messagesProcessed: 0,
+    messagesInQueue: 0,
+    visibleNow: 0,
   };
 
-  const statCards = [
+  let overview = $state<OverviewMetrics | null>(null);
+  let queueMetrics = $state<QueueMetric[]>([]);
+  const overviewData = $derived(overview ?? overviewDefaults);
+
+  const refreshData = async () => {
+    overview = await provider.getOverviewMetrics();
+    queueMetrics = await provider.getQueueMetrics();
+  };
+
+  const handleRefresh = () => {
+    void refreshData();
+  };
+
+  const statCards = $derived([
     {
       label: "Active queues",
-      value: overview.activeQueues,
+      value: overviewData.activeQueues,
       description: "Queues with registered metrics",
     },
     {
       label: "Messages processed",
-      value: overview.messagesProcessed,
+      value: overviewData.messagesProcessed,
       description: "Total messages the queues have seen",
     },
     {
       label: "Messages in queue",
-      value: overview.messagesInQueue,
+      value: overviewData.messagesInQueue,
       description: "Unclaimed messages in queue storage",
     },
     {
       label: "Visible right now",
-      value: overview.visibleNow,
+      value: overviewData.visibleNow,
       description: "Ready for immediate consumption",
     },
-  ];
+  ]);
+
+  onMount(() => {
+    void refreshData();
+  });
 </script>
 
 <section class="flex flex-wrap items-start justify-between gap-4">
