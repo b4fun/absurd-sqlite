@@ -1,6 +1,6 @@
 use log;
 use tauri::{async_runtime, Manager};
-use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri_plugin_cli::CliExt;
 
 use crate::{db::DatabaseHandle, worker::spawn_worker};
@@ -9,7 +9,7 @@ mod db;
 mod db_commands;
 mod worker;
 use crate::db_commands::{
-    apply_migration, apply_migrations_all, get_event_filter_defaults, get_events,
+    apply_migration, apply_migrations_all, create_queue, get_event_filter_defaults, get_events,
     get_filtered_events, get_migrations, get_overview_metrics, get_queue_metrics, get_queue_names,
     get_queue_summaries, get_settings_info, get_task_history, get_task_runs, get_task_runs_for_queue,
 };
@@ -39,6 +39,7 @@ pub fn run() {
             get_task_history,
             get_queue_names,
             get_queue_summaries,
+            create_queue,
             get_event_filter_defaults,
             get_events,
             get_filtered_events,
@@ -71,10 +72,17 @@ pub fn run() {
                 let devtools = MenuItemBuilder::with_id(DEVTOOLS_MENU_ID, "Open DevTools")
                     .accelerator("CmdOrCtrl+Alt+I")
                     .build(&app_handle)?;
+                let edit_menu = SubmenuBuilder::new(&app_handle, "Edit")
+                    .item(&PredefinedMenuItem::cut(&app_handle, None)?)
+                    .item(&PredefinedMenuItem::copy(&app_handle, None)?)
+                    .item(&PredefinedMenuItem::paste(&app_handle, None)?)
+                    .item(&PredefinedMenuItem::select_all(&app_handle, None)?)
+                    .build()?;
                 let developer_menu = SubmenuBuilder::new(&app_handle, "Developer")
                     .item(&devtools)
                     .build()?;
                 let menu = MenuBuilder::new(&app_handle)
+                    .item(&edit_menu)
                     .item(&developer_menu)
                     .build()?;
                 app.set_menu(menu)?;

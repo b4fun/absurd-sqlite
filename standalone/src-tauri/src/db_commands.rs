@@ -204,6 +204,19 @@ impl<'a> TauriDataProvider<'a> {
         Ok(names)
     }
 
+    pub fn create_queue(&self, queue_name: &str) -> Result<()> {
+        let trimmed = queue_name.trim();
+        if trimmed.is_empty() {
+            return Err(anyhow::anyhow!("Queue name is required"));
+        }
+
+        self.conn.execute(
+            "insert or ignore into absurd_queues (queue_name, created_at) values (?1, ?2)",
+            rusqlite::params![trimmed, current_time_ms()],
+        )?;
+        Ok(())
+    }
+
     pub fn get_queue_metrics(&self) -> Result<Vec<QueueMetric>> {
         let queue_names = self.get_queue_names()?;
         let mut metrics = Vec::with_capacity(queue_names.len());
@@ -919,6 +932,17 @@ pub fn get_queue_summaries(
 ) -> Result<Vec<QueueSummary>, String> {
     with_provider(&app_handle, &db_handle, |provider| {
         provider.get_queue_summaries()
+    })
+}
+
+#[tauri::command]
+pub fn create_queue(
+    queue_name: String,
+    app_handle: AppHandle,
+    db_handle: State<DatabaseHandle>,
+) -> Result<(), String> {
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.create_queue(&queue_name)
     })
 }
 

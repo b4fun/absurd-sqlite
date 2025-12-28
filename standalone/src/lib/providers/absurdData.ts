@@ -87,6 +87,7 @@ export type AbsurdDataProvider = {
   getTaskHistory: (taskId: string) => Promise<TaskRun[]>;
   getQueueNames: () => Promise<string[]>;
   getQueueSummaries: () => Promise<QueueSummary[]>;
+  createQueue: (queueName: string) => Promise<void>;
   getEventFilterDefaults: (queueName?: string) => Promise<EventFilterDefaults>;
   getEvents: () => Promise<EventEntry[]>;
   getFilteredEvents: (filters: { queueName?: string; eventName?: string }) => Promise<EventEntry[]>;
@@ -113,6 +114,7 @@ export const tauriAbsurdProvider: AbsurdDataProvider = {
   getTaskHistory: (taskId) => tauriInvoke("get_task_history", { task_id: taskId }),
   getQueueNames: () => tauriInvoke("get_queue_names"),
   getQueueSummaries: () => tauriInvoke("get_queue_summaries"),
+  createQueue: (queueName) => tauriInvoke("create_queue", { queueName }),
   getEventFilterDefaults: (queueName) =>
     tauriInvoke("get_event_filter_defaults", queueName ? { queue_name: queueName } : undefined),
   getEvents: () => tauriInvoke("get_events"),
@@ -145,6 +147,7 @@ export const getAbsurdProvider = (): AbsurdDataProvider =>
 export const mockAbsurdProvider: AbsurdDataProvider = {
   getQueueNames: async () =>
     (await mockAbsurdProvider.getQueueSummaries()).map((queue) => queue.name),
+  createQueue: async () => {},
   getOverviewMetrics: async () => ({
     activeQueues: 1,
     messagesProcessed: 0,

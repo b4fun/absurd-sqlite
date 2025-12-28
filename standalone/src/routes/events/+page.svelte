@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { onMount } from "svelte";
+  import Button from "$lib/components/Button.svelte";
   import SelectField from "$lib/components/SelectField.svelte";
   import {
     getAbsurdProvider,
@@ -95,13 +96,13 @@
       Inspect emitted events across queues with filterable payloads.
     </p>
   </div>
-  <button
+  <Button
     type="button"
-    class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:cursor-pointer"
+    class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700"
     onclick={handleRefresh}
   >
     Refresh
-  </button>
+  </Button>
 </section>
 
 <section class="mt-8 grid gap-6 lg:grid-cols-[1.1fr_2fr]">

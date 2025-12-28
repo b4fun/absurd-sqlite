@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Button from "$lib/components/Button.svelte";
   import {
     getAbsurdProvider,
     type OverviewMetrics,
@@ -62,13 +63,13 @@
       Current queue health across your Absurd installation.
     </p>
   </div>
-  <button
+  <Button
     type="button"
-    class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:cursor-pointer"
+    class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700"
     onclick={handleRefresh}
   >
     Refresh
-  </button>
+  </Button>
 </section>
 
 <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">

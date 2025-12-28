@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Button from "$lib/components/Button.svelte";
   import {
     getAbsurdProvider,
     type MigrationEntry,
@@ -65,13 +66,13 @@
       Version details, storage location, and migration health.
     </p>
   </div>
-  <button
+  <Button
     type="button"
-    class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:cursor-pointer"
+    class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700"
     onclick={handleRefresh}
   >
     Refresh
-  </button>
+  </Button>
 </section>
 
 <section class="mt-8 grid gap-4 grid-cols-2">
@@ -112,14 +113,14 @@
         </p>
       </div>
       <div class="flex items-center gap-3">
-        <button
+        <Button
           type="button"
-          class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={!hasPendingMigrations}
           onclick={handleApplyAll}
         >
           Apply all migrations
-        </button>
+        </Button>
       </div>
     </div>
     <div class="mt-6 overflow-hidden rounded-lg border border-black/10">
@@ -163,13 +164,13 @@
                 </td>
               <td class="px-4 py-3 text-right text-slate-600">
                 {#if migration.status === "pending"}
-                  <button
+                  <Button
                     type="button"
-                    class="rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:cursor-pointer"
+                    class="rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-medium text-slate-700"
                     onclick={() => handleApplyMigration(migration.id)}
                   >
                     Apply
-                  </button>
+                  </Button>
                 {/if}
               </td>
             </tr>

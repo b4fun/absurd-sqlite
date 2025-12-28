@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { onMount } from "svelte";
+  import Button from "$lib/components/Button.svelte";
   import { getAbsurdProvider, type TaskRun } from "$lib/providers/absurdData";
 
   const provider = getAbsurdProvider();
@@ -58,13 +59,13 @@
   </div>
   <div class="flex items-center gap-3 text-sm text-slate-600">
     <a href="/tasks" class="hover:text-slate-900">← Back to runs</a>
-    <button
+    <Button
       type="button"
-      class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:cursor-pointer"
+      class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700"
       onclick={() => void refreshRuns()}
     >
       Refresh
-    </button>
+    </Button>
   </div>
 </section>
 
@@ -136,7 +137,7 @@
         <div class="mt-4 rounded-md border border-black/10">
           <div class="flex items-center justify-between border-b border-black/10 bg-slate-50 px-3 py-2 text-xs text-slate-500">
             <span>Parameters</span>
-            <button type="button" class="hover:text-slate-700 hover:cursor-pointer">Copy</button>
+            <Button type="button" class="hover:text-slate-700">Copy</Button>
           </div>
           <pre class="whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">{run.paramsJson || "{}"}</pre>
         </div>
@@ -145,7 +146,7 @@
           <div class="mt-3 rounded-md border border-black/10">
             <div class="flex items-center justify-between border-b border-black/10 bg-slate-50 px-3 py-2 text-xs text-slate-500">
               <span>Final State</span>
-              <button type="button" class="hover:text-slate-700 hover:cursor-pointer">Copy</button>
+              <Button type="button" class="hover:text-slate-700">Copy</Button>
             </div>
             <pre class="whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">{run.finalStateJson}</pre>
           </div>

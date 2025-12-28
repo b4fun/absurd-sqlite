@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { onMount } from "svelte";
+  import Button from "$lib/components/Button.svelte";
   import SelectField from "$lib/components/SelectField.svelte";
   import { getAbsurdProvider, type TaskRun } from "$lib/providers/absurdData";
 
@@ -100,13 +101,13 @@
       <input type="checkbox" checked class="h-4 w-4" />
       <span>Auto-refresh (15s)</span>
     </label>
-    <button
+    <Button
       type="button"
-      class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:cursor-pointer"
+      class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700"
       onclick={handleRefresh}
     >
       Refresh
-    </button>
+    </Button>
   </div>
 </section>
 
@@ -245,9 +246,7 @@
                 <div class="mt-4 rounded-md border border-black/10">
                   <div class="flex items-center justify-between border-b border-black/10 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                     <span>Parameters</span>
-                    <button type="button" class="hover:text-slate-700 hover:cursor-pointer">
-                      Copy
-                    </button>
+                    <Button type="button" class="hover:text-slate-700">Copy</Button>
                   </div>
                   <pre class="whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">
 {run.paramsJson || "{}"}
@@ -257,9 +256,7 @@
                 <div class="mt-3 rounded-md border border-black/10">
                   <div class="flex items-center justify-between border-b border-black/10 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                     <span>Final State</span>
-                    <button type="button" class="hover:text-slate-700 hover:cursor-pointer">
-                      Copy
-                    </button>
+                    <Button type="button" class="hover:text-slate-700">Copy</Button>
                   </div>
                   <pre class="whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">
 ▼
