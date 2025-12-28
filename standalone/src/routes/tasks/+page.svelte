@@ -8,10 +8,19 @@
 
   const provider = getAbsurdProvider();
   const allQueuesLabel = "All queues";
+  const allStatusesLabel = "All statuses";
+  const allTaskNamesLabel = "All task names";
   let queueOptions = $state<string[]>([]);
   const urlQueue = $derived(page.url.searchParams.get("queue") ?? allQueuesLabel);
+  const urlSearch = $derived(page.url.searchParams.get("q") ?? "");
   let selectedQueue = $state(allQueuesLabel);
+  let selectedStatus = $state(allStatusesLabel);
+  let selectedTaskName = $state(allTaskNamesLabel);
   let lastUrlQueue = $state(allQueuesLabel);
+  let searchTerm = $state("");
+  let activeSearch = $state("");
+  let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+  let lastUrlSearch = $state("");
   let taskRuns = $state<TaskRun[]>([]);
   let expandedId = $state<string | null>(null);
   let isReady = $state(false);
@@ -20,6 +29,30 @@
   };
   const toggleExpanded = (runId: string) => {
     expandedId = expandedId === runId ? null : runId;
+  };
+  const handleSearchInput = (event: Event) => {
+    const target = event.currentTarget as HTMLInputElement | null;
+    if (!target) return;
+    searchTerm = target.value;
+    if (searchDebounce) {
+      clearTimeout(searchDebounce);
+    }
+    searchDebounce = setTimeout(() => {
+      const nextSearch = searchTerm.trim();
+      activeSearch = nextSearch;
+      updateQuery({ q: nextSearch || null });
+    }, 200);
+  };
+  const formatJsonBlock = (value: string | null | undefined) => {
+    if (!value) return "";
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    try {
+      const parsed = JSON.parse(trimmed);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return trimmed;
+    }
   };
   const currentStatusByTaskId = $derived(
     taskRuns.reduce<Record<string, { status: TaskRun["status"]; attemptNumber: number }>>(
@@ -59,6 +92,18 @@
   });
 
   $effect(() => {
+    if (urlSearch !== lastUrlSearch) {
+      lastUrlSearch = urlSearch;
+      if (searchTerm !== urlSearch) {
+        searchTerm = urlSearch;
+      }
+      if (activeSearch !== urlSearch) {
+        activeSearch = urlSearch;
+      }
+    }
+  });
+
+  $effect(() => {
     updateQuery({ queue: selectedQueue === allQueuesLabel ? null : selectedQueue });
   });
 
@@ -77,6 +122,46 @@
         ? await provider.getTaskRuns()
         : await provider.getTaskRunsForQueue(selectedQueue);
   };
+
+  const normalizedSearch = $derived(activeSearch.trim().toLowerCase());
+  const statusOptions = $derived(
+    [allStatusesLabel, ...new Set(taskRuns.map((run) => run.status))]
+  );
+  const taskNameOptions = $derived(
+    [allTaskNamesLabel, ...new Set(taskRuns.map((run) => run.name))]
+  );
+  const visibleTaskRuns = $derived(
+    normalizedSearch.length === 0
+      ? taskRuns
+      : taskRuns.filter((run) => {
+          const haystack = [
+            run.id,
+            run.runId,
+            run.name,
+            run.queue,
+            run.status,
+            run.paramsSummary,
+            run.paramsJson,
+            run.finalStateJson ?? "",
+            run.worker,
+          ]
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(normalizedSearch);
+        })
+  );
+
+  const filteredTaskRuns = $derived(
+    visibleTaskRuns.filter((run) => {
+      if (selectedStatus !== allStatusesLabel && run.status !== selectedStatus) {
+        return false;
+      }
+      if (selectedTaskName !== allTaskNamesLabel && run.name !== selectedTaskName) {
+        return false;
+      }
+      return true;
+    })
+  );
 
   $effect(() => {
     if (!isReady) return;
@@ -124,8 +209,13 @@
       Search
       <input
         type="search"
-        placeholder="Search IDs, names, queue, or params... (Enter to search)"
+        placeholder="Search IDs, names, queue, or params..."
         class="rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-slate-700"
+        value={searchTerm}
+        oninput={handleSearchInput}
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck={false}
       />
     </label>
     <SelectField label="Queue" bind:value={selectedQueue}>
@@ -134,16 +224,20 @@
         <option value={queue}>{queue}</option>
       {/each}
     </SelectField>
-    <SelectField label="Status">
-      <option>All statuses</option>
+    <SelectField label="Status" bind:value={selectedStatus}>
+      {#each statusOptions as option}
+        <option value={option}>{option}</option>
+      {/each}
     </SelectField>
-    <SelectField label="Task name">
-      <option>All task names</option>
+    <SelectField label="Task name" bind:value={selectedTaskName}>
+      {#each taskNameOptions as option}
+        <option value={option}>{option}</option>
+      {/each}
     </SelectField>
   </div>
 
   <div class="mt-4 text-sm text-slate-600">
-    Showing 1–{taskRuns.length} of {taskRuns.length} tasks
+    Showing 1–{filteredTaskRuns.length} of {taskRuns.length} tasks
   </div>
 
   <div class="mt-6 overflow-hidden rounded-lg border border-black/10">
@@ -161,7 +255,7 @@
         </tr>
       </thead>
       <tbody class="bg-white">
-        {#each taskRuns as run}
+        {#each filteredTaskRuns as run}
           <tr
             class="border-t border-black/5 hover:bg-slate-50 hover:cursor-pointer"
             onclick={() => toggleExpanded(run.runId)}
@@ -249,7 +343,7 @@
                     <Button type="button" class="hover:text-slate-700">Copy</Button>
                   </div>
                   <pre class="whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">
-{run.paramsJson || "{}"}
+{formatJsonBlock(run.paramsJson) || "{}"}
                   </pre>
                 </div>
 
@@ -258,10 +352,15 @@
                     <span>Final State</span>
                     <Button type="button" class="hover:text-slate-700">Copy</Button>
                   </div>
-                  <pre class="whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">
-▼
-{run.finalStateJson || "{}"}
-                  </pre>
+                  {#if formatJsonBlock(run.finalStateJson)}
+                    <pre class="whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">
+{formatJsonBlock(run.finalStateJson)}
+                    </pre>
+                  {:else}
+                    <div class="bg-white px-3 py-3 text-xs text-slate-500">
+                      No final state yet.
+                    </div>
+                  {/if}
                 </div>
               </td>
             </tr>

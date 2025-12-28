@@ -298,11 +298,11 @@ impl<'a> TauriDataProvider<'a> {
                 r.created_at,
                 r.completed_at,
                 r.failed_at,
-                t.params,
+                json(t.params),
                 t.max_attempts,
                 r.claimed_by,
-                r.result,
-                r.failure_reason
+                json(r.result),
+                json(r.failure_reason)
              from absurd_runs r
              join absurd_tasks t
                on t.queue_name = r.queue_name and t.task_id = r.task_id
@@ -382,7 +382,7 @@ impl<'a> TauriDataProvider<'a> {
             .filter(|value| !value.is_empty());
 
         let mut stmt = self.conn.prepare(
-            "select queue_name, event_name, emitted_at, payload
+            "select queue_name, event_name, emitted_at, json(payload)
              from absurd_events
              order by emitted_at desc",
         )?;
@@ -586,11 +586,11 @@ impl<'a> TauriDataProvider<'a> {
                     r.created_at,
                     r.completed_at,
                     r.failed_at,
-                    t.params,
+                    json(t.params),
                     t.max_attempts,
                     r.claimed_by,
-                    r.result,
-                    r.failure_reason
+                    json(r.result),
+                    json(r.failure_reason)
                  from absurd_runs r
                  join absurd_tasks t
                    on t.queue_name = r.queue_name and t.task_id = r.task_id
@@ -614,11 +614,11 @@ impl<'a> TauriDataProvider<'a> {
                 r.created_at,
                 r.completed_at,
                 r.failed_at,
-                t.params,
+                json(t.params),
                 t.max_attempts,
                 r.claimed_by,
-                r.result,
-                r.failure_reason
+                json(r.result),
+                json(r.failure_reason)
              from absurd_runs r
              join absurd_tasks t
                on t.queue_name = r.queue_name and t.task_id = r.task_id
