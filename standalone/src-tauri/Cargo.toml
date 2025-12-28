@@ -30,6 +30,8 @@ tokio = "1.48.0"
 rusqlite = { version = "0.38.0", features = ["bundled", "load_extension"] }
 tauri-plugin-fs = "2"
 chrono = { version = "0.4", features = ["clock"] }
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-cli = "2"

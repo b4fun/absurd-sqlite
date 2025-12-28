@@ -4,9 +4,11 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuild
 use tauri_plugin_cli::CliExt;
 
 use crate::{db::DatabaseHandle, worker::spawn_worker};
+use crate::dev_api::{parse_dev_api_enabled, parse_dev_api_port, DevApiState};
 
 mod db;
 mod db_commands;
+mod dev_api;
 mod worker;
 use crate::db_commands::{
     apply_migration, apply_migrations_all, create_queue, get_event_filter_defaults, get_events,
@@ -46,7 +48,9 @@ pub fn run() {
             get_settings_info,
             get_migrations,
             apply_migrations_all,
-            apply_migration
+            apply_migration,
+            dev_api::get_dev_api_status,
+            dev_api::set_dev_api_enabled
         ])
         .on_menu_event(|app, event| {
             if event.id() == DEVTOOLS_MENU_ID {
@@ -58,13 +62,43 @@ pub fn run() {
         .setup(move |app| {
             let app_handle = app.handle().clone();
 
-            match app.cli().matches() {
-                Ok(matches) => {
-                    let db_handle =
-                        DatabaseHandle::from_cli_arg(&app_handle, matches.args.get("db"))?;
-                    app_handle.manage(db_handle);
-                }
-                Err(_) => {}
+            let mut enable_dev_api = false;
+            let mut dev_api_port = None;
+            let mut db_handle = None;
+
+            if let Ok(matches) = app.cli().matches() {
+                enable_dev_api = parse_dev_api_enabled(
+                    matches
+                        .args
+                        .get("enable-dev-api-server")
+                        .map(|arg| &arg.value),
+                );
+                dev_api_port = parse_dev_api_port(
+                    matches
+                        .args
+                        .get("dev-api-server-port")
+                        .map(|arg| &arg.value),
+                );
+                db_handle = Some(DatabaseHandle::from_cli_arg(
+                    &app_handle,
+                    matches.args.get("db"),
+                )?);
+            }
+
+            let db_handle = match db_handle {
+                Some(handle) => handle,
+                None => DatabaseHandle::use_app_data(&app_handle)?,
+            };
+
+            app_handle.manage(db_handle);
+            app_handle.manage(DevApiState::new(enable_dev_api, dev_api_port));
+            if enable_dev_api {
+                let app_handle = app_handle.clone();
+                async_runtime::spawn(async move {
+                    if let Err(err) = dev_api::ensure_running(&app_handle).await {
+                        log::error!("Failed to start dev api server: {}", err);
+                    }
+                });
             }
 
             #[cfg(not(any(target_os = "android", target_os = "ios")))]

@@ -1,3 +1,5 @@
+import { createTRPCProxyClient, httpLink } from "@trpc/client";
+
 export type OverviewMetrics = {
   activeQueues: number;
   messagesProcessed: number;
@@ -97,7 +99,7 @@ export type AbsurdDataProvider = {
   applyMigration: (migrationId: number) => Promise<number>;
 };
 
-const isTauriRuntime = () =>
+export const isTauriRuntime = () =>
   typeof window !== "undefined" && Boolean((window as { __TAURI__?: unknown }).__TAURI__);
 
 const tauriInvoke = async <T>(command: string, args?: Record<string, unknown>): Promise<T> => {
@@ -141,8 +143,138 @@ const mockMigrations: MigrationEntry[] = [
   },
 ];
 
+const DEV_API_PORT_BASE = 11223;
+const DEV_API_PORT_ATTEMPTS = 10;
+const DEV_API_REQUEST_TIMEOUT_MS = 400;
+
+let devApiBaseUrl: string | null | undefined = undefined;
+let devApiResolveInFlight: Promise<string | null> | null = null;
+let trpcClient: ReturnType<typeof createTRPCProxyClient<any>> | null = null;
+let trpcClientBaseUrl: string | null = null;
+
+const resolveDevApiBaseUrl = async (): Promise<string | null> => {
+  if (devApiBaseUrl !== undefined) {
+    return devApiBaseUrl;
+  }
+
+  if (devApiResolveInFlight) {
+    return devApiResolveInFlight;
+  }
+
+  devApiResolveInFlight = (async () => {
+    for (let attempt = 0; attempt < DEV_API_PORT_ATTEMPTS; attempt += 1) {
+      const port = DEV_API_PORT_BASE + attempt;
+      const baseUrl = `http://localhost:${port}`;
+      const ok = await probeDevApi(baseUrl);
+      if (ok) {
+        devApiBaseUrl = baseUrl;
+        return baseUrl;
+      }
+    }
+    devApiBaseUrl = null;
+    return null;
+  })();
+
+  const resolved = await devApiResolveInFlight;
+  devApiResolveInFlight = null;
+  return resolved;
+};
+
+const probeDevApi = async (baseUrl: string): Promise<boolean> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEV_API_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${baseUrl}/absurd-data/health`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: 1, json: null }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return false;
+    }
+    const payload = (await response.json()) as {
+      result?: { data?: { ok?: boolean } };
+    };
+    return Boolean(payload.result?.data?.ok);
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const getTrpcClient = async () => {
+  const baseUrl = await resolveDevApiBaseUrl();
+  if (!baseUrl) {
+    return null;
+  }
+
+  if (!trpcClient || trpcClientBaseUrl !== baseUrl) {
+    trpcClientBaseUrl = baseUrl;
+    trpcClient = createTRPCProxyClient<any>({
+      links: [
+        httpLink({
+          url: `${baseUrl}/absurd-data`,
+        }),
+      ],
+    });
+  }
+
+  return trpcClient;
+};
+
+const trpcQuery = async <T>(procedure: string, input?: unknown): Promise<T> => {
+  const client = await getTrpcClient();
+  if (!client) {
+    throw new Error("Dev API server not available");
+  }
+  const caller = (client as Record<string, { query: (value?: unknown) => Promise<T> }>)[
+    procedure
+  ];
+  if (!caller?.query) {
+    throw new Error(`Unknown tRPC query ${procedure}`);
+  }
+  return caller.query(input);
+};
+
+const trpcMutation = async <T>(procedure: string, input?: unknown): Promise<T> => {
+  const client = await getTrpcClient();
+  if (!client) {
+    throw new Error("Dev API server not available");
+  }
+  const caller = (client as Record<string, { mutate: (value?: unknown) => Promise<T> }>)[
+    procedure
+  ];
+  if (!caller?.mutate) {
+    throw new Error(`Unknown tRPC mutation ${procedure}`);
+  }
+  return caller.mutate(input);
+};
+
+const trpcAbsurdProvider: AbsurdDataProvider = {
+  getOverviewMetrics: () => trpcQuery("getOverviewMetrics"),
+  getQueueMetrics: () => trpcQuery("getQueueMetrics"),
+  getTaskRuns: () => trpcQuery("getTaskRuns"),
+  getTaskRunsForQueue: (queueName) =>
+    trpcQuery("getTaskRunsForQueue", { queueName }),
+  getTaskHistory: (taskId) => trpcQuery("getTaskHistory", { taskId }),
+  getQueueNames: () => trpcQuery("getQueueNames"),
+  getQueueSummaries: () => trpcQuery("getQueueSummaries"),
+  createQueue: (queueName) => trpcMutation("createQueue", { queueName }),
+  getEventFilterDefaults: (queueName) =>
+    trpcQuery("getEventFilterDefaults", queueName ? { queueName } : null),
+  getEvents: () => trpcQuery("getEvents"),
+  getFilteredEvents: (filters) => trpcQuery("getFilteredEvents", filters),
+  getSettingsInfo: () => trpcQuery("getSettingsInfo"),
+  getMigrations: () => trpcQuery("getMigrations"),
+  applyMigrationsAll: () => trpcMutation("applyMigrationsAll"),
+  applyMigration: (migrationId) =>
+    trpcMutation("applyMigration", { migrationId }),
+};
+
 export const getAbsurdProvider = (): AbsurdDataProvider =>
-  isTauriRuntime() ? tauriAbsurdProvider : mockAbsurdProvider;
+  isTauriRuntime() ? tauriAbsurdProvider : trpcAbsurdProvider;
 
 export const mockAbsurdProvider: AbsurdDataProvider = {
   getQueueNames: async () =>
