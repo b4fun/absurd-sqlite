@@ -15,6 +15,7 @@
     { label: "Tasks", href: "/tasks", dotClass: "bg-blue-500" },
     { label: "Events", href: "/events", dotClass: "bg-purple-500" },
     { label: "Queues", href: "/queues", dotClass: "bg-orange-400" },
+    { label: "Settings", href: "/settings", dotClass: "bg-rose-500" },
   ];
 
   const pathname = $derived(page.url.pathname);
@@ -36,7 +37,7 @@
     class:header-compact={isCompact}
   >
     <div class="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-8 py-4 transition-all duration-200 header-inner">
-      <p class="text-base font-semibold text-slate-900 header-logo">Absurd Habitat</p>
+      <p class="text-base font-semibold text-slate-900 header-logo select-none">Absurd Habitat</p>
       <nav class="flex items-center gap-3 text-sm text-slate-600">
         {#each navItems as item}
           <a

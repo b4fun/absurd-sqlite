@@ -3,6 +3,9 @@ use chrono::{TimeZone, Utc};
 use rusqlite::{types::Value as SqlValue, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
 
 use crate::db::DatabaseHandle;
@@ -92,6 +95,33 @@ pub struct EventEntry {
     pub queue: String,
     pub created_at: String,
     pub payload_preview: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MigrationStatus {
+    pub status: String,
+    pub applied_count: i64,
+    pub latest_version: Option<String>,
+    pub latest_applied_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsInfo {
+    pub absurd_version: String,
+    pub sqlite_version: String,
+    pub db_path: String,
+    pub migration: MigrationStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MigrationEntry {
+    pub id: i64,
+    pub introduced_version: String,
+    pub applied_at: Option<String>,
+    pub status: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -384,6 +414,119 @@ impl<'a> TauriDataProvider<'a> {
         Ok(entries)
     }
 
+    pub fn get_settings_info(&self, db_path: String) -> Result<SettingsInfo> {
+        let absurd_version: String = self
+            .conn
+            .query_row("select absurd_version()", [], |row| row.get(0))?;
+        let sqlite_version: String = self
+            .conn
+            .query_row("select sqlite_version()", [], |row| row.get(0))?;
+
+        let applied_count: i64 = self
+            .conn
+            .query_row(
+                "select count(*) from absurd_migration_records()",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        let latest: Option<(String, i64)> = self
+            .conn
+            .query_row(
+                "select introduced_version, applied_time from absurd_migration_records() order by id desc limit 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+
+        let (latest_version, latest_applied_at) = match latest {
+            Some((version, applied_time)) => {
+                (Some(version), Some(format_datetime(applied_time)))
+            }
+            None => (None, None),
+        };
+
+        let status = if applied_count > 0 {
+            "applied".to_string()
+        } else {
+            "missing".to_string()
+        };
+
+        Ok(SettingsInfo {
+            absurd_version,
+            sqlite_version,
+            db_path,
+            migration: MigrationStatus {
+                status,
+                applied_count,
+                latest_version,
+                latest_applied_at,
+            },
+        })
+    }
+
+    pub fn get_migrations(&self) -> Result<Vec<MigrationEntry>> {
+        let mut stmt = self.conn.prepare(
+            "select id, introduced_version, applied_time from absurd_migration_records() order by id",
+        )?;
+        let applied_rows = stmt
+            .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get(1)?, row.get(2)?)))?
+            .collect::<std::result::Result<Vec<(i64, String, i64)>, _>>()?;
+
+        let mut applied_map: HashMap<i64, (String, i64)> = HashMap::new();
+        for (id, introduced_version, applied_time) in applied_rows {
+            applied_map.insert(id, (introduced_version, applied_time));
+        }
+
+        let mut entries = Vec::new();
+        let mut known_ids = HashMap::new();
+        for migration in read_known_migrations() {
+            let applied = applied_map.get(&migration.id);
+            entries.push(MigrationEntry {
+                id: migration.id,
+                introduced_version: applied
+                    .map(|(version, _)| version.clone())
+                    .unwrap_or(migration.introduced_version),
+                applied_at: applied.map(|(_, time)| format_datetime(*time)),
+                status: if applied.is_some() {
+                    "applied".to_string()
+                } else {
+                    "pending".to_string()
+                },
+            });
+            known_ids.insert(migration.id, ());
+        }
+
+        for (id, (introduced_version, applied_time)) in applied_map {
+            if known_ids.contains_key(&id) {
+                continue;
+            }
+            entries.push(MigrationEntry {
+                id,
+                introduced_version,
+                applied_at: Some(format_datetime(applied_time)),
+                status: "applied".to_string(),
+            });
+        }
+
+        entries.sort_by_key(|entry| entry.id);
+        Ok(entries)
+    }
+
+    pub fn apply_migrations_all(&self) -> Result<i64> {
+        let applied: i64 = self
+            .conn
+            .query_row("select absurd_apply_migrations()", [], |row| row.get(0))?;
+        Ok(applied)
+    }
+
+    pub fn apply_migration(&self, migration_id: i64) -> Result<i64> {
+        let applied: i64 = self
+            .conn
+            .query_row("select absurd_apply_migrations(?1)", [migration_id], |row| row.get(0))?;
+        Ok(applied)
+    }
+
     fn get_queue_stats(&self, queue_name: &str) -> Result<Vec<QueueSummaryStat>> {
         let mut stmt = self.conn.prepare(
             "select state, count(*) from absurd_tasks where queue_name = ? group by state",
@@ -590,6 +733,76 @@ fn truncate_string(value: &str, max_len: usize) -> String {
     format!("{}...", truncated)
 }
 
+struct MigrationFile {
+    id: i64,
+    introduced_version: String,
+}
+
+fn parse_introduced_version(contents: &str, default_version: &str) -> String {
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("-- introduced_version:") {
+            let value = rest.trim();
+            if !value.is_empty() {
+                return value.to_string();
+            }
+        }
+    }
+    default_version.to_string()
+}
+
+fn read_known_migrations() -> Vec<MigrationFile> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = manifest_dir
+        .parent()
+        .and_then(Path::parent)
+        .unwrap_or(&manifest_dir);
+    let migrations_dir = workspace_root
+        .join("absurd-sqlite-extension")
+        .join("migrations");
+    let entries = match fs::read_dir(&migrations_dir) {
+        Ok(entries) => entries,
+        Err(_) => return Vec::new(),
+    };
+
+    let default_version = "0.0.0";
+    let mut migrations = Vec::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("sql") {
+            continue;
+        }
+        let filename = match path.file_name().and_then(|name| name.to_str()) {
+            Some(name) => name,
+            None => continue,
+        };
+        let stem = match Path::new(filename).file_stem().and_then(|name| name.to_str()) {
+            Some(stem) => stem,
+            None => continue,
+        };
+        if !stem.chars().all(|c| c.is_ascii_digit()) {
+            continue;
+        }
+        let id: i64 = match stem.parse() {
+            Ok(id) => id,
+            Err(_) => continue,
+        };
+        let contents = match fs::read_to_string(&path) {
+            Ok(contents) => contents,
+            Err(_) => continue,
+        };
+        let introduced_version = parse_introduced_version(&contents, default_version);
+        migrations.push(MigrationFile {
+            id,
+            introduced_version,
+        });
+    }
+
+    migrations.sort_by_key(|migration| migration.id);
+    migrations
+}
+
 fn format_datetime(ms: i64) -> String {
     let fallback = Utc.timestamp_millis_opt(0).single().unwrap();
     let dt = Utc.timestamp_millis_opt(ms).single().unwrap_or(fallback);
@@ -737,6 +950,45 @@ pub fn get_filtered_events(
     with_provider(&app_handle, &db_handle, |provider| {
         provider.get_filtered_events(Some(filters))
     })
+}
+
+#[tauri::command]
+pub fn get_settings_info(
+    app_handle: AppHandle,
+    db_handle: State<DatabaseHandle>,
+) -> Result<SettingsInfo, String> {
+    let db_path = db_handle
+        .db_path(&app_handle)
+        .context("failed to resolve database path")
+        .map_err(|err| err.to_string())?;
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_settings_info(db_path.clone())
+    })
+}
+
+#[tauri::command]
+pub fn get_migrations(
+    app_handle: AppHandle,
+    db_handle: State<DatabaseHandle>,
+) -> Result<Vec<MigrationEntry>, String> {
+    with_provider(&app_handle, &db_handle, |provider| provider.get_migrations())
+}
+
+#[tauri::command]
+pub fn apply_migrations_all(
+    app_handle: AppHandle,
+    db_handle: State<DatabaseHandle>,
+) -> Result<i64, String> {
+    with_provider(&app_handle, &db_handle, |provider| provider.apply_migrations_all())
+}
+
+#[tauri::command]
+pub fn apply_migration(
+    migration_id: i64,
+    app_handle: AppHandle,
+    db_handle: State<DatabaseHandle>,
+) -> Result<i64, String> {
+    with_provider(&app_handle, &db_handle, |provider| provider.apply_migration(migration_id))
 }
 
 fn with_provider<T>(

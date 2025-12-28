@@ -58,6 +58,27 @@ export type EventEntry = {
   payloadPreview: string;
 };
 
+export type MigrationStatus = {
+  status: "applied" | "missing";
+  appliedCount: number;
+  latestVersion: string | null;
+  latestAppliedAt: string | null;
+};
+
+export type SettingsInfo = {
+  absurdVersion: string;
+  sqliteVersion: string;
+  dbPath: string;
+  migration: MigrationStatus;
+};
+
+export type MigrationEntry = {
+  id: number;
+  introducedVersion: string;
+  appliedAt: string | null;
+  status: "applied" | "pending";
+};
+
 export type AbsurdDataProvider = {
   getOverviewMetrics: () => Promise<OverviewMetrics>;
   getQueueMetrics: () => Promise<QueueMetric[]>;
@@ -69,6 +90,10 @@ export type AbsurdDataProvider = {
   getEventFilterDefaults: (queueName?: string) => Promise<EventFilterDefaults>;
   getEvents: () => Promise<EventEntry[]>;
   getFilteredEvents: (filters: { queueName?: string; eventName?: string }) => Promise<EventEntry[]>;
+  getSettingsInfo: () => Promise<SettingsInfo>;
+  getMigrations: () => Promise<MigrationEntry[]>;
+  applyMigrationsAll: () => Promise<number>;
+  applyMigration: (migrationId: number) => Promise<number>;
 };
 
 const isTauriRuntime = () =>
@@ -92,7 +117,27 @@ export const tauriAbsurdProvider: AbsurdDataProvider = {
     tauriInvoke("get_event_filter_defaults", queueName ? { queue_name: queueName } : undefined),
   getEvents: () => tauriInvoke("get_events"),
   getFilteredEvents: (filters) => tauriInvoke("get_filtered_events", { filters }),
+  getSettingsInfo: () => tauriInvoke("get_settings_info"),
+  getMigrations: () => tauriInvoke("get_migrations"),
+  applyMigrationsAll: () => tauriInvoke("apply_migrations_all"),
+  applyMigration: (migrationId) =>
+    tauriInvoke("apply_migration", { migration_id: migrationId }),
 };
+
+const mockMigrations: MigrationEntry[] = [
+  {
+    id: 1,
+    introducedVersion: "0.1.0",
+    appliedAt: "Dec 27, 2025, 2:48 PM",
+    status: "applied",
+  },
+  {
+    id: 2,
+    introducedVersion: "0.2.0",
+    appliedAt: null,
+    status: "pending",
+  },
+];
 
 export const getAbsurdProvider = (): AbsurdDataProvider =>
   isTauriRuntime() ? tauriAbsurdProvider : mockAbsurdProvider;
@@ -319,5 +364,37 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
         normalizedEventName.length === 0 || event.name.toLowerCase().includes(normalizedEventName);
       return queueMatch && nameMatch;
     });
+  },
+  getSettingsInfo: async () => ({
+    absurdVersion: "absurd-sqlite/0.0.0",
+    sqliteVersion: "3.45.0",
+    dbPath: "/Users/demo/Library/Application Support/absurd-sqlite.db",
+    migration: {
+      status: "applied",
+      appliedCount: 1,
+      latestVersion: "0.1.0",
+      latestAppliedAt: "Dec 27, 2025, 2:48 PM",
+    },
+  }),
+  getMigrations: async () => mockMigrations.map((entry) => ({ ...entry })),
+  applyMigrationsAll: async () => {
+    let applied = 0;
+    for (const entry of mockMigrations) {
+      if (entry.status === "pending") {
+        entry.status = "applied";
+        entry.appliedAt = "Dec 27, 2025, 3:15 PM";
+        applied += 1;
+      }
+    }
+    return applied;
+  },
+  applyMigration: async (migrationId: number) => {
+    const entry = mockMigrations.find((row) => row.id === migrationId);
+    if (!entry || entry.status === "applied") {
+      return 0;
+    }
+    entry.status = "applied";
+    entry.appliedAt = "Dec 27, 2025, 3:15 PM";
+    return 1;
   },
 };

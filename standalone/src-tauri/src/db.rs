@@ -47,7 +47,7 @@ impl DatabaseHandle {
         Self::use_app_data(app_handle)
     }
 
-    fn db_path(&self, app_handle: &AppHandle) -> Result<String> {
+    pub fn db_path(&self, app_handle: &AppHandle) -> Result<String> {
         match &self.source {
             Source::Path(path) => Ok(path.clone()),
             Source::AppData => {

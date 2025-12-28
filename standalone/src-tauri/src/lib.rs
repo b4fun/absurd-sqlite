@@ -9,9 +9,9 @@ mod db;
 mod db_commands;
 mod worker;
 use crate::db_commands::{
-    get_event_filter_defaults, get_events, get_filtered_events, get_overview_metrics,
-    get_queue_metrics, get_queue_names, get_queue_summaries, get_task_history, get_task_runs,
-    get_task_runs_for_queue,
+    apply_migration, apply_migrations_all, get_event_filter_defaults, get_events,
+    get_filtered_events, get_migrations, get_overview_metrics, get_queue_metrics, get_queue_names,
+    get_queue_summaries, get_settings_info, get_task_history, get_task_runs, get_task_runs_for_queue,
 };
 
 const DEVTOOLS_MENU_ID: &str = "open_devtools";
@@ -41,7 +41,11 @@ pub fn run() {
             get_queue_summaries,
             get_event_filter_defaults,
             get_events,
-            get_filtered_events
+            get_filtered_events,
+            get_settings_info,
+            get_migrations,
+            apply_migrations_all,
+            apply_migration
         ])
         .on_menu_event(|app, event| {
             if event.id() == DEVTOOLS_MENU_ID {
