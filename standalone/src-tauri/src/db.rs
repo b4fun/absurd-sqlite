@@ -1,8 +1,9 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use log;
 use rusqlite::Connection;
 use serde_json::Value;
-use tauri::{AppHandle, Manager};
+use std::path::{Path, PathBuf};
+use tauri::{path::BaseDirectory, AppHandle, Manager};
 use tauri_plugin_cli::ArgData;
 
 enum Source {
@@ -65,8 +66,77 @@ impl DatabaseHandle {
         let db_path = self.db_path(app_handle)?;
         let conn = Connection::open(db_path)?;
 
-        // TODO: load extension
+        let extension_path = resolve_extension_path(app_handle);
+        if extension_path.is_none() {
+            // fail early if no extension found
+            return Err(anyhow::anyhow!("SQLite extension not found"));
+        }
+
+        log::debug!("Loading SQLite extension from {:?}", extension_path);
+        // Safety: extension from own build
+        unsafe {
+            conn.load_extension_enable()
+                .context("enable extension loading")?;
+            conn.load_extension(
+                extension_path.unwrap().to_string_lossy().as_ref(),
+                None::<&str>,
+            )
+            .context("load SQLite extension")?;
+            conn.load_extension_disable()
+                .context("disable extension loading")?;
+        }
+        log::debug!("SQLite extension loaded successfully");
 
         Ok(conn)
+    }
+}
+
+fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
+    let triple = std::env::var("TAURI_TARGET_TRIPLE").unwrap_or_else(|_| "unknown".to_string());
+    let bin_name = format!(
+        "absurd-extension-{}{}",
+        triple,
+        if cfg!(target_os = "windows") {
+            ".exe"
+        } else {
+            ""
+        }
+    );
+
+    if let Ok(path) = app_handle
+        .path()
+        .resolve(Path::new("bin").join(&bin_name), BaseDirectory::Resource)
+    {
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = manifest_dir
+        .parent()
+        .and_then(Path::parent)
+        .unwrap_or(&manifest_dir);
+    let target_dir = workspace_root.join("target");
+    let lib_name = extension_lib_name();
+    let debug_path = target_dir.join("debug").join(&lib_name);
+    if debug_path.exists() {
+        return Some(debug_path);
+    }
+    let release_path = target_dir.join("release").join(&lib_name);
+    if release_path.exists() {
+        return Some(release_path);
+    }
+
+    None
+}
+
+fn extension_lib_name() -> String {
+    if cfg!(target_os = "windows") {
+        "absurd.dll".to_string()
+    } else if cfg!(target_os = "macos") {
+        "libabsurd.dylib".to_string()
+    } else {
+        "libabsurd.so".to_string()
     }
 }

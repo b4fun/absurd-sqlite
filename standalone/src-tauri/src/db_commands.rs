@@ -114,6 +114,7 @@ impl<'a> TauriDataProvider<'a> {
         }
     }
 
+    #[allow(unused)]
     pub fn with_now(conn: &'a Connection, now_ms: i64) -> Self {
         Self { conn, now_ms }
     }
@@ -205,13 +206,11 @@ impl<'a> TauriDataProvider<'a> {
                 )
                 .unwrap_or(0);
 
-            let mut stmt = self
-                .conn
-                .prepare(
-                    "select min(enqueue_at), max(enqueue_at) from absurd_tasks where queue_name = ?",
-                )?;
-            let (oldest, newest): (Option<i64>, Option<i64>) = stmt
-                .query_row([&queue], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            let mut stmt = self.conn.prepare(
+                "select min(enqueue_at), max(enqueue_at) from absurd_tasks where queue_name = ?",
+            )?;
+            let (oldest, newest): (Option<i64>, Option<i64>) =
+                stmt.query_row([&queue], |row| Ok((row.get(0)?, row.get(1)?)))?;
 
             let (oldest_age, newest_age) = match (oldest, newest) {
                 (Some(oldest), Some(newest)) => (
@@ -273,10 +272,12 @@ impl<'a> TauriDataProvider<'a> {
     }
 
     pub fn get_queue_summaries(&self) -> Result<Vec<QueueSummary>> {
-        let mut stmt = self.conn.prepare(
-            "select queue_name, created_at from absurd_queues order by queue_name",
-        )?;
-        let queue_rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
+        let mut stmt = self
+            .conn
+            .prepare("select queue_name, created_at from absurd_queues order by queue_name")?;
+        let queue_rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?;
 
         let mut summaries = Vec::new();
 
@@ -295,7 +296,10 @@ impl<'a> TauriDataProvider<'a> {
         Ok(summaries)
     }
 
-    pub fn get_event_filter_defaults(&self, queue_name: Option<&str>) -> Result<EventFilterDefaults> {
+    pub fn get_event_filter_defaults(
+        &self,
+        queue_name: Option<&str>,
+    ) -> Result<EventFilterDefaults> {
         let placeholder: Option<String> = self
             .conn
             .query_row(
@@ -384,7 +388,9 @@ impl<'a> TauriDataProvider<'a> {
         let mut stmt = self.conn.prepare(
             "select state, count(*) from absurd_tasks where queue_name = ? group by state",
         )?;
-        let rows = stmt.query_map([queue_name], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
+        let rows = stmt.query_map([queue_name], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?;
 
         let mut counts = std::collections::HashMap::new();
         for row in rows {
@@ -435,8 +441,9 @@ impl<'a> TauriDataProvider<'a> {
                  where r.queue_name = ?
                  order by r.created_at desc"#,
             )?;
-            let rows =
-                stmt.query_map(rusqlite::params![queue], |row| map_task_run_row(row, self.now_ms))?;
+            let rows = stmt.query_map(rusqlite::params![queue], |row| {
+                map_task_run_row(row, self.now_ms)
+            })?;
             return Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?);
         }
 
@@ -492,7 +499,10 @@ fn map_task_run_row(row: &rusqlite::Row<'_>, now_ms: i64) -> rusqlite::Result<Ta
         _ => None,
     };
 
-    let updated_at = completed_at.or(failed_at).or(started_at).unwrap_or(created_at);
+    let updated_at = completed_at
+        .or(failed_at)
+        .or(started_at)
+        .unwrap_or(created_at);
     let started_at = started_at.unwrap_or(created_at);
 
     Ok(TaskRun {
@@ -552,7 +562,9 @@ fn build_params_summary(value: &Value) -> String {
 }
 
 fn payload_preview_from_value(value: Option<Value>) -> String {
-    let Some(value) = value else { return String::new(); };
+    let Some(value) = value else {
+        return String::new();
+    };
     let compact = serde_json::to_string(&value).unwrap_or_else(|_| value.to_string());
     truncate_string(&compact, 120)
 }
@@ -632,7 +644,9 @@ pub fn get_overview_metrics(
     app_handle: AppHandle,
     db_handle: State<DatabaseHandle>,
 ) -> Result<OverviewMetrics, String> {
-    with_provider(&app_handle, &db_handle, |provider| provider.get_overview_metrics())
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_overview_metrics()
+    })
 }
 
 #[tauri::command]
@@ -640,7 +654,9 @@ pub fn get_queue_metrics(
     app_handle: AppHandle,
     db_handle: State<DatabaseHandle>,
 ) -> Result<Vec<QueueMetric>, String> {
-    with_provider(&app_handle, &db_handle, |provider| provider.get_queue_metrics())
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_queue_metrics()
+    })
 }
 
 #[tauri::command]
@@ -657,7 +673,9 @@ pub fn get_task_runs_for_queue(
     app_handle: AppHandle,
     db_handle: State<DatabaseHandle>,
 ) -> Result<Vec<TaskRun>, String> {
-    with_provider(&app_handle, &db_handle, |provider| provider.get_task_runs_for_queue(&queue_name))
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_task_runs_for_queue(&queue_name)
+    })
 }
 
 #[tauri::command]
@@ -666,7 +684,9 @@ pub fn get_task_history(
     app_handle: AppHandle,
     db_handle: State<DatabaseHandle>,
 ) -> Result<Vec<TaskRun>, String> {
-    with_provider(&app_handle, &db_handle, |provider| provider.get_task_history(&task_id))
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_task_history(&task_id)
+    })
 }
 
 #[tauri::command]
@@ -674,7 +694,9 @@ pub fn get_queue_names(
     app_handle: AppHandle,
     db_handle: State<DatabaseHandle>,
 ) -> Result<Vec<String>, String> {
-    with_provider(&app_handle, &db_handle, |provider| provider.get_queue_names())
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_queue_names()
+    })
 }
 
 #[tauri::command]
@@ -682,7 +704,9 @@ pub fn get_queue_summaries(
     app_handle: AppHandle,
     db_handle: State<DatabaseHandle>,
 ) -> Result<Vec<QueueSummary>, String> {
-    with_provider(&app_handle, &db_handle, |provider| provider.get_queue_summaries())
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_queue_summaries()
+    })
 }
 
 #[tauri::command]
@@ -710,7 +734,9 @@ pub fn get_filtered_events(
     app_handle: AppHandle,
     db_handle: State<DatabaseHandle>,
 ) -> Result<Vec<EventEntry>, String> {
-    with_provider(&app_handle, &db_handle, |provider| provider.get_filtered_events(Some(filters)))
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_filtered_events(Some(filters))
+    })
 }
 
 fn with_provider<T>(
@@ -917,10 +943,7 @@ mod tests {
         assert_eq!(metric.total_seen, 4);
         assert_eq!(metric.newest_age, format_age_short(10_000));
         assert_eq!(metric.oldest_age, format_age_short(30_000));
-        assert_eq!(
-            metric.scraped_at,
-            format_datetime_with_seconds(now_ms)
-        );
+        assert_eq!(metric.scraped_at, format_datetime_with_seconds(now_ms));
     }
 
     #[test]
@@ -974,9 +997,7 @@ mod tests {
         seed_data(&conn, now_ms);
 
         let provider = TauriDataProvider::with_now(&conn, now_ms);
-        let defaults = provider
-            .get_event_filter_defaults(None)
-            .expect("defaults");
+        let defaults = provider.get_event_filter_defaults(None).expect("defaults");
         assert_eq!(defaults.event_name_placeholder, "task.completed");
         assert_eq!(defaults.queue_label, "All queues");
         assert_eq!(defaults.queue_options, vec!["All queues", "default"]);
