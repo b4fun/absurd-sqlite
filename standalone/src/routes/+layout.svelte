@@ -7,6 +7,8 @@
   // See: https://v2.tauri.app/start/frontend/sveltekit/ for more info
   export const ssr = false;
 
+  let { children } = $props();
+
   import { onMount } from "svelte";
   import { page } from "$app/state";
 
@@ -58,7 +60,7 @@
   </header>
 
   <main class="mx-auto w-full max-w-screen-2xl px-8 py-8">
-    <slot />
+    {@render children?.()}
   </main>
 </div>
 

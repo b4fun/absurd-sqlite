@@ -79,7 +79,7 @@
     <button
       type="button"
       class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:cursor-pointer"
-      on:click={handleRefresh}
+      onclick={handleRefresh}
     >
       Refresh
     </button>
@@ -139,7 +139,7 @@
         {#each taskRuns as run}
           <tr
             class="border-t border-black/5 hover:bg-slate-50 hover:cursor-pointer"
-            on:click={() => toggleExpanded(run.runId)}
+            onclick={() => toggleExpanded(run.runId)}
           >
             <td class="px-4 py-3 font-mono text-xs text-slate-600">{run.id}</td>
             <td class="px-4 py-3 text-slate-800">{run.name}</td>

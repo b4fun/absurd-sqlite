@@ -41,7 +41,7 @@
   <button
     type="button"
     class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:cursor-pointer"
-    on:click={handleRefresh}
+    onclick={handleRefresh}
   >
     Refresh
   </button>
