@@ -3,15 +3,16 @@
   import { onMount } from "svelte";
   import Button from "$lib/components/Button.svelte";
   import JsonBlock from "$lib/components/JsonBlock.svelte";
-  import { getAbsurdProvider, type TaskRun } from "$lib/providers/absurdData";
+  import { getAbsurdProvider, type TaskInfo, type TaskRun } from "$lib/providers/absurdData";
 
   const provider = getAbsurdProvider();
   const taskId = $derived(page.params.taskId ?? "");
   let runs = $state<TaskRun[]>([]);
+  let taskInfo = $state<TaskInfo | null>(null);
   let isReady = $state(false);
   const sortedRuns = $derived([...runs].sort((a, b) => b.attemptNumber - a.attemptNumber));
-  const taskName = $derived(runs[0]?.name ?? "Unknown");
-  const queueName = $derived(runs[0]?.queue ?? "default");
+  const taskName = $derived(runs[0]?.name ?? taskInfo?.name ?? "Unknown");
+  const queueName = $derived(runs[0]?.queue ?? taskInfo?.queue ?? "default");
   const latestUpdatedAgo = $derived(sortedRuns[0]?.updatedAgo ?? "—");
   const durationLabel = "8m 2s";
   const completionLabel = $derived(
@@ -30,9 +31,15 @@
   const refreshRuns = async () => {
     if (!taskId) {
       runs = [];
+      taskInfo = null;
       return;
     }
     runs = await provider.getTaskHistory(taskId);
+    if (runs.length === 0) {
+      taskInfo = await provider.getTaskInfo(taskId);
+    } else {
+      taskInfo = null;
+    }
   };
 
   $effect(() => {

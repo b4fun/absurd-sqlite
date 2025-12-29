@@ -65,6 +65,14 @@ pub struct TaskRun {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TaskInfo {
+    pub id: String,
+    pub name: String,
+    pub queue: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskRunFilters {
     pub queue_name: Option<String>,
     pub status: Option<String>,
@@ -406,6 +414,23 @@ impl<'a> TauriDataProvider<'a> {
 
         let rows = stmt.query_map([task_id], |row| map_task_run_row(row, self.now_ms))?;
         Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+    }
+
+    pub fn get_task_info(&self, task_id: &str) -> Result<Option<TaskInfo>> {
+        self.conn
+            .query_row(
+                "select task_id, task_name, queue_name from absurd_tasks where task_id = ?",
+                [task_id],
+                |row| {
+                    Ok(TaskInfo {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        queue: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(Into::into)
     }
 
     pub fn get_queue_summaries(&self) -> Result<Vec<QueueSummary>> {
@@ -1095,6 +1120,17 @@ pub fn get_task_history(
 ) -> Result<Vec<TaskRun>, String> {
     with_provider(&app_handle, &db_handle, |provider| {
         provider.get_task_history(&task_id)
+    })
+}
+
+#[tauri::command]
+pub fn get_task_info(
+    task_id: String,
+    app_handle: AppHandle,
+    db_handle: State<DatabaseHandle>,
+) -> Result<Option<TaskInfo>, String> {
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_task_info(&task_id)
     })
 }
 

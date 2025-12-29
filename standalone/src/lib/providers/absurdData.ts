@@ -36,6 +36,12 @@ export type TaskRun = {
   worker: string;
 };
 
+export type TaskInfo = {
+  id: string;
+  name: string;
+  queue: string;
+};
+
 export type TaskRunFilters = {
   queueName?: string;
   status?: TaskRun["status"];
@@ -101,6 +107,7 @@ export type AbsurdDataProvider = {
   getTaskRunsForQueue: (queueName: string) => Promise<TaskRun[]>;
   getTaskRunsPage: (filters: TaskRunFilters) => Promise<TaskRunPage>;
   getTaskHistory: (taskId: string) => Promise<TaskRun[]>;
+  getTaskInfo: (taskId: string) => Promise<TaskInfo | null>;
   getQueueNames: () => Promise<string[]>;
   getTaskNameOptions: (queueName?: string) => Promise<string[]>;
   getQueueSummaries: () => Promise<QueueSummary[]>;
@@ -130,6 +137,7 @@ export const tauriAbsurdProvider: AbsurdDataProvider = {
     tauriInvoke("get_task_runs_for_queue", { queue_name: queueName }),
   getTaskRunsPage: (filters) => tauriInvoke("get_task_runs_page", { filters }),
   getTaskHistory: (taskId) => tauriInvoke("get_task_history", { task_id: taskId }),
+  getTaskInfo: (taskId) => tauriInvoke("get_task_info", { task_id: taskId }),
   getQueueNames: () => tauriInvoke("get_queue_names"),
   getTaskNameOptions: (queueName) =>
     tauriInvoke("get_task_name_options", { queue_name: queueName ?? null }),
@@ -164,13 +172,22 @@ const mockMigrations: MigrationEntry[] = [
 const DEV_API_PORT_BASE = 11223;
 const DEV_API_PORT_ATTEMPTS = 10;
 const DEV_API_REQUEST_TIMEOUT_MS = 400;
+const DEV_API_RETRY_DELAY_MS = 2000;
 
 let devApiBaseUrl: string | null | undefined = undefined;
+let devApiLastFailureMs: number | null = null;
 let devApiResolveInFlight: Promise<string | null> | null = null;
 let trpcClient: ReturnType<typeof createTRPCProxyClient<any>> | null = null;
 let trpcClientBaseUrl: string | null = null;
 
 const resolveDevApiBaseUrl = async (): Promise<string | null> => {
+  if (devApiBaseUrl === null && devApiLastFailureMs !== null) {
+    if (Date.now() - devApiLastFailureMs < DEV_API_RETRY_DELAY_MS) {
+      return null;
+    }
+    devApiBaseUrl = undefined;
+  }
+
   if (devApiBaseUrl !== undefined) {
     return devApiBaseUrl;
   }
@@ -186,10 +203,12 @@ const resolveDevApiBaseUrl = async (): Promise<string | null> => {
       const ok = await probeDevApi(baseUrl);
       if (ok) {
         devApiBaseUrl = baseUrl;
+        devApiLastFailureMs = null;
         return baseUrl;
       }
     }
     devApiBaseUrl = null;
+    devApiLastFailureMs = Date.now();
     return null;
   })();
 
@@ -278,6 +297,7 @@ const trpcAbsurdProvider: AbsurdDataProvider = {
     trpcQuery("getTaskRunsForQueue", { queueName }),
   getTaskRunsPage: (filters) => trpcQuery("getTaskRunsPage", filters),
   getTaskHistory: (taskId) => trpcQuery("getTaskHistory", { taskId }),
+  getTaskInfo: (taskId) => trpcQuery("getTaskInfo", { taskId }),
   getQueueNames: () => trpcQuery("getQueueNames"),
   getTaskNameOptions: (queueName) =>
     trpcQuery("getTaskNameOptions", queueName ? { queueName } : null),
@@ -500,6 +520,13 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
   },
   getTaskHistory: async (taskId: string) =>
     (await mockAbsurdProvider.getTaskRuns()).filter((run) => run.id === taskId),
+  getTaskInfo: async (taskId: string) => {
+    const run = (await mockAbsurdProvider.getTaskRuns()).find((item) => item.id === taskId);
+    if (!run) {
+      return null;
+    }
+    return { id: run.id, name: run.name, queue: run.queue };
+  },
   getQueueSummaries: async () => [
     {
       name: "default",

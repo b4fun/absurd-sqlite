@@ -345,6 +345,13 @@ fn handle_procedure(
                 Ok(serde_json::to_value(runs)?)
             })
         }
+        "getTaskInfo" => {
+            let payload: TaskIdInput = parse_input(input)?;
+            with_provider(app_handle, |provider| {
+                let info = provider.get_task_info(&payload.task_id)?;
+                Ok(serde_json::to_value(info)?)
+            })
+        }
         "getQueueNames" => with_provider(app_handle, |provider| {
             let names = provider.get_queue_names()?;
             Ok(serde_json::to_value(names)?)
