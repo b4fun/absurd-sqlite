@@ -41,14 +41,6 @@
         {
           "name": "db",
           "description": "Path to the SQLite database file"
-        },
-        {
-          "name": "enable-dev-api-server",
-          "description": "Enable the local dev API server"
-        },
-        {
-          "name": "dev-api-server-port",
-          "description": "Port for the dev API server (default 11223)"
         }
       ]
     }

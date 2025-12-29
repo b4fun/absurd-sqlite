@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
+use tauri_plugin_store::StoreExt;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tower_http::cors::CorsLayer;
@@ -16,6 +17,8 @@ use crate::db_commands::{EventFilters, TaskRunFilters, TauriDataProvider};
 
 const DEV_API_PORT_DEFAULT: u16 = 11223;
 const DEV_API_PORT_ATTEMPTS: u16 = 10;
+const DEV_API_STORE_PATH: &str = "dev-api.json";
+const DEV_API_ENABLED_KEY: &str = "dev_api_enabled";
 
 #[derive(Clone)]
 struct DevApiContext {
@@ -95,6 +98,23 @@ pub async fn set_dev_api_enabled(
     set_enabled(&app_handle, enabled).await
 }
 
+pub fn load_dev_api_enabled(app_handle: &AppHandle) -> Option<bool> {
+    let store = app_handle.store(DEV_API_STORE_PATH).ok()?;
+    if store.reload().is_err() {
+        return None;
+    }
+    let stored = store.get(DEV_API_ENABLED_KEY);
+    stored.as_ref().map(|value| parse_dev_api_enabled(Some(value)))
+}
+
+fn persist_dev_api_enabled(app_handle: &AppHandle, enabled: bool) -> Result<(), String> {
+    let store = app_handle
+        .store(DEV_API_STORE_PATH)
+        .map_err(|err| err.to_string())?;
+    store.set(DEV_API_ENABLED_KEY, Value::Bool(enabled));
+    store.save().map_err(|err| err.to_string())
+}
+
 pub fn parse_dev_api_port(value: Option<&serde_json::Value>) -> Option<u16> {
     match value {
         Some(Value::Number(num)) => num.as_u64().and_then(|port| u16::try_from(port).ok()),
@@ -170,11 +190,14 @@ pub async fn set_enabled(app_handle: &AppHandle, enabled: bool) -> Result<DevApi
         if let Err(err) = ensure_running(app_handle).await {
             let mut flag = state.enabled.lock().unwrap();
             *flag = false;
+            let _ = persist_dev_api_enabled(app_handle, false);
             return Err(err);
         }
     } else {
         stop_running(app_handle).await?;
     }
+
+    persist_dev_api_enabled(app_handle, enabled)?;
 
     Ok(state.status())
 }

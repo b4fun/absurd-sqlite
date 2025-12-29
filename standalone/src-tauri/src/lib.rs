@@ -1,10 +1,10 @@
 use log;
-use tauri::{async_runtime, Manager};
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::{async_runtime, Manager};
 use tauri_plugin_cli::CliExt;
 
+use crate::dev_api::{load_dev_api_enabled, DevApiState};
 use crate::{db::DatabaseHandle, worker::spawn_worker};
-use crate::dev_api::{parse_dev_api_enabled, parse_dev_api_port, DevApiState};
 
 mod db;
 mod db_commands;
@@ -34,6 +34,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             get_overview_metrics,
             get_queue_metrics,
@@ -66,23 +67,10 @@ pub fn run() {
         .setup(move |app| {
             let app_handle = app.handle().clone();
 
-            let mut enable_dev_api = true;
-            let mut dev_api_port = None;
+            let mut enable_dev_api = load_dev_api_enabled(&app_handle).unwrap_or(false);
             let mut db_handle = None;
 
             if let Ok(matches) = app.cli().matches() {
-                enable_dev_api = parse_dev_api_enabled(
-                    matches
-                        .args
-                        .get("enable-dev-api-server")
-                        .map(|arg| &arg.value),
-                );
-                dev_api_port = parse_dev_api_port(
-                    matches
-                        .args
-                        .get("dev-api-server-port")
-                        .map(|arg| &arg.value),
-                );
                 db_handle = Some(DatabaseHandle::from_cli_arg(
                     &app_handle,
                     matches.args.get("db"),
@@ -95,7 +83,7 @@ pub fn run() {
             };
 
             app_handle.manage(db_handle);
-            app_handle.manage(DevApiState::new(enable_dev_api, dev_api_port));
+            app_handle.manage(DevApiState::new(enable_dev_api, None));
             if enable_dev_api {
                 let app_handle = app_handle.clone();
                 async_runtime::spawn(async move {
