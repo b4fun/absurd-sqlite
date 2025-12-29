@@ -136,8 +136,8 @@ export const tauriAbsurdProvider: AbsurdDataProvider = {
   getTaskRunsForQueue: (queueName) =>
     tauriInvoke("get_task_runs_for_queue", { queue_name: queueName }),
   getTaskRunsPage: (filters) => tauriInvoke("get_task_runs_page", { filters }),
-  getTaskHistory: (taskId) => tauriInvoke("get_task_history", { task_id: taskId }),
-  getTaskInfo: (taskId) => tauriInvoke("get_task_info", { task_id: taskId }),
+  getTaskHistory: (taskId) => tauriInvoke("get_task_history", { taskId }),
+  getTaskInfo: (taskId) => tauriInvoke("get_task_info", { taskId }),
   getQueueNames: () => tauriInvoke("get_queue_names"),
   getTaskNameOptions: (queueName) =>
     tauriInvoke("get_task_name_options", { queue_name: queueName ?? null }),

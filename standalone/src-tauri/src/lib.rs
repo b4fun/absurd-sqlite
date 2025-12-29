@@ -10,12 +10,6 @@ mod db;
 mod db_commands;
 mod dev_api;
 mod worker;
-use crate::db_commands::{
-    apply_migration, apply_migrations_all, create_queue, get_event_filter_defaults, get_events,
-    get_filtered_events, get_migrations, get_overview_metrics, get_queue_metrics, get_queue_names,
-    get_queue_summaries, get_settings_info, get_task_history, get_task_info, get_task_name_options,
-    get_task_runs, get_task_runs_for_queue, get_task_runs_page,
-};
 
 const DEVTOOLS_MENU_ID: &str = "open_devtools";
 
@@ -36,24 +30,24 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
-            get_overview_metrics,
-            get_queue_metrics,
-            get_task_runs,
-            get_task_runs_for_queue,
-            get_task_runs_page,
-            get_task_history,
-            get_task_info,
-            get_queue_names,
-            get_queue_summaries,
-            create_queue,
-            get_task_name_options,
-            get_event_filter_defaults,
-            get_events,
-            get_filtered_events,
-            get_settings_info,
-            get_migrations,
-            apply_migrations_all,
-            apply_migration,
+            db_commands::get_overview_metrics,
+            db_commands::get_queue_metrics,
+            db_commands::get_task_runs,
+            db_commands::get_task_runs_for_queue,
+            db_commands::get_task_runs_page,
+            db_commands::get_task_history,
+            db_commands::get_task_info,
+            db_commands::get_queue_names,
+            db_commands::get_queue_summaries,
+            db_commands::create_queue,
+            db_commands::get_task_name_options,
+            db_commands::get_event_filter_defaults,
+            db_commands::get_events,
+            db_commands::get_filtered_events,
+            db_commands::get_settings_info,
+            db_commands::get_migrations,
+            db_commands::apply_migrations_all,
+            db_commands::apply_migration,
             dev_api::get_dev_api_status,
             dev_api::set_dev_api_enabled
         ])
