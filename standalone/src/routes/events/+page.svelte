@@ -19,6 +19,7 @@
   let lastUrlQueue = $state("");
   let lastUrlEventName = $state("");
   let isReady = $state(false);
+  let isLoading = $state(false);
   let filters = $state<EventFilterDefaults>({
     eventNamePlaceholder: "payment.completed",
     queueLabel: allQueuesLabel,
@@ -72,10 +73,15 @@
   };
 
   const refreshEvents = async () => {
-    filteredEvents = await provider.getFilteredEvents({
-      queueName: selectedQueue,
-      eventName: eventNameQuery,
-    });
+    isLoading = true;
+    try {
+      filteredEvents = await provider.getFilteredEvents({
+        queueName: selectedQueue,
+        eventName: eventNameQuery,
+      });
+    } finally {
+      isLoading = false;
+    }
   };
 
   $effect(() => {
@@ -139,7 +145,15 @@
       </p>
     </div>
 
-    {#if filteredEvents.length === 0}
+    {#if isLoading}
+      <div class="mt-6 flex items-center gap-2 text-sm text-slate-500">
+        <span
+          class="h-3 w-3 animate-spin rounded-full border border-slate-300 border-t-slate-600"
+          aria-hidden="true"
+        ></span>
+        Loading events...
+      </div>
+    {:else if filteredEvents.length === 0}
       <div class="mt-6 rounded-lg border border-dashed border-black/20 bg-white px-6 py-10 text-center">
         <p class="text-sm text-slate-500">No events matched the selected filters.</p>
       </div>

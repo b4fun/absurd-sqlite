@@ -13,7 +13,8 @@ mod worker;
 use crate::db_commands::{
     apply_migration, apply_migrations_all, create_queue, get_event_filter_defaults, get_events,
     get_filtered_events, get_migrations, get_overview_metrics, get_queue_metrics, get_queue_names,
-    get_queue_summaries, get_settings_info, get_task_history, get_task_runs, get_task_runs_for_queue,
+    get_queue_summaries, get_settings_info, get_task_history, get_task_name_options, get_task_runs,
+    get_task_runs_for_queue, get_task_runs_page,
 };
 
 const DEVTOOLS_MENU_ID: &str = "open_devtools";
@@ -38,10 +39,12 @@ pub fn run() {
             get_queue_metrics,
             get_task_runs,
             get_task_runs_for_queue,
+            get_task_runs_page,
             get_task_history,
             get_queue_names,
             get_queue_summaries,
             create_queue,
+            get_task_name_options,
             get_event_filter_defaults,
             get_events,
             get_filtered_events,

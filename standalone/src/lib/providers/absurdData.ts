@@ -36,6 +36,19 @@ export type TaskRun = {
   worker: string;
 };
 
+export type TaskRunFilters = {
+  queueName?: string;
+  status?: TaskRun["status"];
+  taskName?: string;
+  search?: string;
+  limit?: number;
+};
+
+export type TaskRunPage = {
+  runs: TaskRun[];
+  totalCount: number;
+};
+
 export type QueueSummary = {
   name: string;
   createdAt: string;
@@ -86,8 +99,10 @@ export type AbsurdDataProvider = {
   getQueueMetrics: () => Promise<QueueMetric[]>;
   getTaskRuns: () => Promise<TaskRun[]>;
   getTaskRunsForQueue: (queueName: string) => Promise<TaskRun[]>;
+  getTaskRunsPage: (filters: TaskRunFilters) => Promise<TaskRunPage>;
   getTaskHistory: (taskId: string) => Promise<TaskRun[]>;
   getQueueNames: () => Promise<string[]>;
+  getTaskNameOptions: (queueName?: string) => Promise<string[]>;
   getQueueSummaries: () => Promise<QueueSummary[]>;
   createQueue: (queueName: string) => Promise<void>;
   getEventFilterDefaults: (queueName?: string) => Promise<EventFilterDefaults>;
@@ -113,8 +128,11 @@ export const tauriAbsurdProvider: AbsurdDataProvider = {
   getTaskRuns: () => tauriInvoke("get_task_runs"),
   getTaskRunsForQueue: (queueName) =>
     tauriInvoke("get_task_runs_for_queue", { queue_name: queueName }),
+  getTaskRunsPage: (filters) => tauriInvoke("get_task_runs_page", { filters }),
   getTaskHistory: (taskId) => tauriInvoke("get_task_history", { task_id: taskId }),
   getQueueNames: () => tauriInvoke("get_queue_names"),
+  getTaskNameOptions: (queueName) =>
+    tauriInvoke("get_task_name_options", { queue_name: queueName ?? null }),
   getQueueSummaries: () => tauriInvoke("get_queue_summaries"),
   createQueue: (queueName) => tauriInvoke("create_queue", { queueName }),
   getEventFilterDefaults: (queueName) =>
@@ -258,8 +276,11 @@ const trpcAbsurdProvider: AbsurdDataProvider = {
   getTaskRuns: () => trpcQuery("getTaskRuns"),
   getTaskRunsForQueue: (queueName) =>
     trpcQuery("getTaskRunsForQueue", { queueName }),
+  getTaskRunsPage: (filters) => trpcQuery("getTaskRunsPage", filters),
   getTaskHistory: (taskId) => trpcQuery("getTaskHistory", { taskId }),
   getQueueNames: () => trpcQuery("getQueueNames"),
+  getTaskNameOptions: (queueName) =>
+    trpcQuery("getTaskNameOptions", queueName ? { queueName } : null),
   getQueueSummaries: () => trpcQuery("getQueueSummaries"),
   createQueue: (queueName) => trpcMutation("createQueue", { queueName }),
   getEventFilterDefaults: (queueName) =>
@@ -279,6 +300,13 @@ export const getAbsurdProvider = (): AbsurdDataProvider =>
 export const mockAbsurdProvider: AbsurdDataProvider = {
   getQueueNames: async () =>
     (await mockAbsurdProvider.getQueueSummaries()).map((queue) => queue.name),
+  getTaskNameOptions: async (queueName?: string) => {
+    const runs = await mockAbsurdProvider.getTaskRuns();
+    const filtered = queueName && queueName !== "All queues"
+      ? runs.filter((run) => run.queue === queueName)
+      : runs;
+    return [...new Set(filtered.map((run) => run.name))].sort();
+  },
   createQueue: async () => {},
   getOverviewMetrics: async () => ({
     activeQueues: 1,
@@ -430,6 +458,46 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
     queueName === "All queues"
       ? mockAbsurdProvider.getTaskRuns()
       : (await mockAbsurdProvider.getTaskRuns()).filter((run) => run.queue === queueName),
+  getTaskRunsPage: async (filters) => {
+    const runs = await mockAbsurdProvider.getTaskRuns();
+    const normalizedQueue = (filters.queueName ?? "All queues").toLowerCase();
+    const status = (filters.status ?? "").toLowerCase();
+    const taskName = (filters.taskName ?? "").trim();
+    const search = (filters.search ?? "").trim().toLowerCase();
+    const limit = filters.limit ?? 500;
+    const filtered = runs.filter((run) => {
+      if (normalizedQueue !== "all queues" && run.queue.toLowerCase() !== normalizedQueue) {
+        return false;
+      }
+      if (status && run.status.toLowerCase() !== status) {
+        return false;
+      }
+      if (taskName && run.name !== taskName) {
+        return false;
+      }
+      if (search) {
+        const haystack = [
+          run.id,
+          run.runId,
+          run.name,
+          run.queue,
+          run.status,
+          run.paramsSummary,
+          run.paramsJson,
+          run.finalStateJson ?? "",
+          run.worker,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(search)) {
+          return false;
+        }
+      }
+      return true;
+    });
+    const limited = limit > 0 ? filtered.slice(0, limit) : filtered;
+    return { runs: limited, totalCount: filtered.length };
+  },
   getTaskHistory: async (taskId: string) =>
     (await mockAbsurdProvider.getTaskRuns()).filter((run) => run.id === taskId),
   getQueueSummaries: async () => [

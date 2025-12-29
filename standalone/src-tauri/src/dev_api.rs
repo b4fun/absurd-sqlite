@@ -12,7 +12,7 @@ use tokio::task::JoinHandle;
 use tower_http::cors::CorsLayer;
 
 use crate::db::DatabaseHandle;
-use crate::db_commands::{EventFilters, TauriDataProvider};
+use crate::db_commands::{EventFilters, TaskRunFilters, TauriDataProvider};
 
 const DEV_API_PORT_DEFAULT: u16 = 11223;
 const DEV_API_PORT_ATTEMPTS: u16 = 10;
@@ -331,6 +331,13 @@ fn handle_procedure(
                 Ok(serde_json::to_value(runs)?)
             })
         }
+        "getTaskRunsPage" => {
+            let payload: TaskRunFilters = parse_input(input)?;
+            with_provider(app_handle, |provider| {
+                let page = provider.get_task_runs_page(payload)?;
+                Ok(serde_json::to_value(page)?)
+            })
+        }
         "getTaskHistory" => {
             let payload: TaskIdInput = parse_input(input)?;
             with_provider(app_handle, |provider| {
@@ -346,6 +353,13 @@ fn handle_procedure(
             let summaries = provider.get_queue_summaries()?;
             Ok(serde_json::to_value(summaries)?)
         }),
+        "getTaskNameOptions" => {
+            let payload: OptionalQueueNameInput = parse_optional_input(input)?;
+            with_provider(app_handle, |provider| {
+                let names = provider.get_task_name_options(payload.queue_name.as_deref())?;
+                Ok(serde_json::to_value(names)?)
+            })
+        }
         "createQueue" => {
             let payload: QueueNameInput = parse_input(input)?;
             with_provider(app_handle, |provider| {

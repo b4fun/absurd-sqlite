@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::{TimeZone, Utc};
-use rusqlite::{types::Value as SqlValue, Connection, OptionalExtension};
+use rusqlite::{params_from_iter, types::Value as SqlValue, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -61,6 +61,23 @@ pub struct TaskRun {
     pub params_json: String,
     pub final_state_json: Option<String>,
     pub worker: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRunFilters {
+    pub queue_name: Option<String>,
+    pub status: Option<String>,
+    pub task_name: Option<String>,
+    pub search: Option<String>,
+    pub limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRunPage {
+    pub runs: Vec<TaskRun>,
+    pub total_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -283,6 +300,83 @@ impl<'a> TauriDataProvider<'a> {
 
     pub fn get_task_runs_for_queue(&self, queue_name: &str) -> Result<Vec<TaskRun>> {
         self.fetch_task_runs(Some(queue_name))
+    }
+
+    pub fn get_task_runs_page(&self, filters: TaskRunFilters) -> Result<TaskRunPage> {
+        let (filter_sql, mut params) = build_task_run_filters(&filters);
+        let count_sql = format!(
+            "select count(*) from absurd_runs r
+             join absurd_tasks t
+               on t.queue_name = r.queue_name and t.task_id = r.task_id{}",
+            filter_sql
+        );
+
+        let total_count: i64 = self
+            .conn
+            .query_row(&count_sql, params_from_iter(params.iter()), |row| row.get(0))
+            .unwrap_or(0);
+
+        let limit = filters.limit.unwrap_or(500);
+        let mut sql = format!(
+            "select
+                r.queue_name,
+                t.task_id,
+                t.task_name,
+                r.state,
+                r.attempt,
+                r.run_id,
+                r.started_at,
+                r.created_at,
+                r.completed_at,
+                r.failed_at,
+                json(t.params),
+                t.max_attempts,
+                r.claimed_by,
+                json(r.result),
+                json(r.failure_reason)
+             from absurd_runs r
+             join absurd_tasks t
+               on t.queue_name = r.queue_name and t.task_id = r.task_id{} 
+             order by r.created_at desc",
+            filter_sql
+        );
+
+        if limit > 0 {
+            sql.push_str(" limit ?");
+            params.push(SqlValue::Integer(limit));
+        }
+
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map(params_from_iter(params.iter()), |row| {
+            map_task_run_row(row, self.now_ms)
+        })?;
+
+        Ok(TaskRunPage {
+            runs: rows.collect::<std::result::Result<Vec<_>, _>>()?,
+            total_count,
+        })
+    }
+
+    pub fn get_task_name_options(&self, queue_name: Option<&str>) -> Result<Vec<String>> {
+        let queue_filter = queue_name
+            .filter(|value| !value.is_empty() && value.to_lowercase() != "all queues");
+        let (sql, params) = if let Some(queue) = queue_filter {
+            (
+                "select distinct task_name from absurd_tasks where queue_name = ? order by task_name",
+                vec![SqlValue::Text(queue.to_string())],
+            )
+        } else {
+            (
+                "select distinct task_name from absurd_tasks order by task_name",
+                Vec::new(),
+            )
+        };
+
+        let mut stmt = self.conn.prepare(sql)?;
+        let names = stmt
+            .query_map(params_from_iter(params.iter()), |row| row.get(0))?
+            .collect::<std::result::Result<Vec<String>, _>>()?;
+        Ok(names)
     }
 
     pub fn get_task_history(&self, task_id: &str) -> Result<Vec<TaskRun>> {
@@ -630,6 +724,73 @@ impl<'a> TauriDataProvider<'a> {
     }
 }
 
+fn build_task_run_filters(filters: &TaskRunFilters) -> (String, Vec<SqlValue>) {
+    let mut clauses: Vec<String> = Vec::new();
+    let mut params: Vec<SqlValue> = Vec::new();
+
+    if let Some(queue) = filters
+        .queue_name
+        .as_ref()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty() && value.to_lowercase() != "all queues")
+    {
+        clauses.push("r.queue_name = ?".to_string());
+        params.push(SqlValue::Text(queue));
+    }
+
+    if let Some(status) = filters
+        .status
+        .as_ref()
+        .map(|value| value.trim().to_lowercase())
+        .filter(|value| !value.is_empty())
+    {
+        clauses.push("lower(r.state) = ?".to_string());
+        params.push(SqlValue::Text(status));
+    }
+
+    if let Some(task_name) = filters
+        .task_name
+        .as_ref()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        clauses.push("t.task_name = ?".to_string());
+        params.push(SqlValue::Text(task_name));
+    }
+
+    if let Some(search) = filters
+        .search
+        .as_ref()
+        .map(|value| value.trim().to_lowercase())
+        .filter(|value| !value.is_empty())
+    {
+        let like = format!("%{}%", search);
+        clauses.push(
+            "(lower(t.task_id) like ?
+              or lower(r.run_id) like ?
+              or lower(t.task_name) like ?
+              or lower(r.queue_name) like ?
+              or lower(r.state) like ?
+              or lower(coalesce(r.claimed_by, '')) like ?
+              or lower(coalesce(json(t.params), '')) like ?
+              or lower(coalesce(json(r.result), '')) like ?
+              or lower(coalesce(json(r.failure_reason), '')) like ?)"
+                .to_string(),
+        );
+        for _ in 0..9 {
+            params.push(SqlValue::Text(like.clone()));
+        }
+    }
+
+    let filter_sql = if clauses.is_empty() {
+        "".to_string()
+    } else {
+        format!(" where {}", clauses.join(" and "))
+    };
+
+    (filter_sql, params)
+}
+
 fn map_task_run_row(row: &rusqlite::Row<'_>, now_ms: i64) -> rusqlite::Result<TaskRun> {
     let queue: String = row.get(0)?;
     let task_id: String = row.get(1)?;
@@ -901,6 +1062,28 @@ pub fn get_task_runs_for_queue(
 ) -> Result<Vec<TaskRun>, String> {
     with_provider(&app_handle, &db_handle, |provider| {
         provider.get_task_runs_for_queue(&queue_name)
+    })
+}
+
+#[tauri::command]
+pub fn get_task_runs_page(
+    filters: TaskRunFilters,
+    app_handle: AppHandle,
+    db_handle: State<DatabaseHandle>,
+) -> Result<TaskRunPage, String> {
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_task_runs_page(filters)
+    })
+}
+
+#[tauri::command]
+pub fn get_task_name_options(
+    queue_name: Option<String>,
+    app_handle: AppHandle,
+    db_handle: State<DatabaseHandle>,
+) -> Result<Vec<String>, String> {
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_task_name_options(queue_name.as_deref())
     })
 }
 

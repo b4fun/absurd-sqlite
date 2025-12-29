@@ -5,13 +5,24 @@
   import Button from "$lib/components/Button.svelte";
   import JsonBlock from "$lib/components/JsonBlock.svelte";
   import SelectField from "$lib/components/SelectField.svelte";
-  import { getAbsurdProvider, type TaskRun } from "$lib/providers/absurdData";
+  import { getAbsurdProvider, type TaskRun, type TaskRunFilters } from "$lib/providers/absurdData";
 
   const provider = getAbsurdProvider();
   const allQueuesLabel = "All queues";
   const allStatusesLabel = "All statuses";
   const allTaskNamesLabel = "All task names";
+  const defaultLimit = 500;
+  const statusOptions = [
+    allStatusesLabel,
+    "running",
+    "failed",
+    "completed",
+    "sleeping",
+    "pending",
+    "cancelled",
+  ];
   let queueOptions = $state<string[]>([]);
+  let taskNameOptions = $state<string[]>([allTaskNamesLabel]);
   const urlQueue = $derived(page.url.searchParams.get("queue") ?? allQueuesLabel);
   const urlSearch = $derived(page.url.searchParams.get("q") ?? "");
   let selectedQueue = $state(allQueuesLabel);
@@ -23,10 +34,18 @@
   let searchDebounce: ReturnType<typeof setTimeout> | null = null;
   let lastUrlSearch = $state("");
   let taskRuns = $state<TaskRun[]>([]);
+  let totalCount = $state(0);
   let expandedId = $state<string | null>(null);
   let isReady = $state(false);
+  let isLoading = $state(false);
+  let limit = $state(defaultLimit);
+  let lastFilterKey = $state("");
   const handleRefresh = () => {
-    void refreshTaskRuns();
+    void refreshTaskRuns(buildFilters());
+    void refreshTaskNameOptions(selectedQueue);
+  };
+  const handleLoadAll = () => {
+    limit = 0;
   };
   const toggleExpanded = (runId: string) => {
     expandedId = expandedId === runId ? null : runId;
@@ -106,56 +125,56 @@
     cancelled: "border-zinc-200 bg-zinc-50 text-zinc-600",
   };
 
-  const refreshTaskRuns = async () => {
-    taskRuns =
-      selectedQueue === allQueuesLabel
-        ? await provider.getTaskRuns()
-        : await provider.getTaskRunsForQueue(selectedQueue);
+  const buildFilters = (): TaskRunFilters => ({
+    queueName: selectedQueue === allQueuesLabel ? undefined : selectedQueue,
+    status: selectedStatus === allStatusesLabel ? undefined : selectedStatus,
+    taskName: selectedTaskName === allTaskNamesLabel ? undefined : selectedTaskName,
+    search: activeSearch.trim() === "" ? undefined : activeSearch,
+    limit,
+  });
+
+  const refreshTaskRuns = async (filters: TaskRunFilters) => {
+    isLoading = true;
+    try {
+      const page = await provider.getTaskRunsPage(filters);
+      taskRuns = page.runs;
+      totalCount = page.totalCount;
+    } finally {
+      isLoading = false;
+    }
   };
 
-  const normalizedSearch = $derived(activeSearch.trim().toLowerCase());
-  const statusOptions = $derived(
-    [allStatusesLabel, ...new Set(taskRuns.map((run) => run.status))]
-  );
-  const taskNameOptions = $derived(
-    [allTaskNamesLabel, ...new Set(taskRuns.map((run) => run.name))]
-  );
-  const visibleTaskRuns = $derived(
-    normalizedSearch.length === 0
-      ? taskRuns
-      : taskRuns.filter((run) => {
-          const haystack = [
-            run.id,
-            run.runId,
-            run.name,
-            run.queue,
-            run.status,
-            run.paramsSummary,
-            run.paramsJson,
-            run.finalStateJson ?? "",
-            run.worker,
-          ]
-            .join(" ")
-            .toLowerCase();
-          return haystack.includes(normalizedSearch);
-        })
-  );
-
-  const filteredTaskRuns = $derived(
-    visibleTaskRuns.filter((run) => {
-      if (selectedStatus !== allStatusesLabel && run.status !== selectedStatus) {
-        return false;
-      }
-      if (selectedTaskName !== allTaskNamesLabel && run.name !== selectedTaskName) {
-        return false;
-      }
-      return true;
-    })
-  );
+  const hasMore = $derived(limit > 0 && totalCount > taskRuns.length);
+  const refreshTaskNameOptions = async (queueName: string) => {
+    const names = await provider.getTaskNameOptions(
+      queueName === allQueuesLabel ? undefined : queueName
+    );
+    taskNameOptions = [allTaskNamesLabel, ...names];
+    if (!taskNameOptions.includes(selectedTaskName)) {
+      selectedTaskName = allTaskNamesLabel;
+    }
+  };
 
   $effect(() => {
     if (!isReady) return;
-    void refreshTaskRuns();
+    const nextKey = `${selectedQueue}|${selectedStatus}|${selectedTaskName}|${activeSearch}`;
+    if (nextKey !== lastFilterKey) {
+      lastFilterKey = nextKey;
+      if (limit !== defaultLimit) {
+        limit = defaultLimit;
+      }
+    }
+  });
+
+  $effect(() => {
+    if (!isReady) return;
+    const filters = buildFilters();
+    void refreshTaskRuns(filters);
+  });
+
+  $effect(() => {
+    if (!isReady) return;
+    void refreshTaskNameOptions(selectedQueue);
   });
 
   onMount(async () => {
@@ -226,8 +245,23 @@
     </SelectField>
   </div>
 
-  <div class="mt-4 text-sm text-slate-600">
-    Showing 1–{filteredTaskRuns.length} of {taskRuns.length} tasks
+  <div class="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
+    <span>
+      {#if totalCount === 0}
+        Showing 0 tasks
+      {:else}
+        Showing 1–{taskRuns.length} of {totalCount} tasks
+      {/if}
+    </span>
+    {#if isLoading}
+      <span class="inline-flex items-center gap-2 text-xs text-slate-500">
+        <span
+          class="h-3 w-3 animate-spin rounded-full border border-slate-300 border-t-slate-600"
+          aria-hidden="true"
+        ></span>
+        Loading task runs...
+      </span>
+    {/if}
   </div>
 
   <div class="mt-6 overflow-hidden rounded-lg border border-black/10">
@@ -245,7 +279,7 @@
         </tr>
       </thead>
       <tbody class="bg-white">
-        {#each filteredTaskRuns as run}
+        {#each taskRuns as run}
           <tr
             class="border-t border-black/5 hover:bg-slate-50 hover:cursor-pointer"
             onclick={() => toggleExpanded(run.runId)}
@@ -344,5 +378,17 @@
         {/each}
       </tbody>
     </table>
+  </div>
+  <div class="mt-4 flex items-center justify-end">
+    {#if hasMore}
+      <Button
+        type="button"
+        class="rounded-md border border-black/10 bg-white px-3 py-1.5 text-xs font-medium text-slate-600"
+        onclick={handleLoadAll}
+        disabled={isLoading}
+      >
+        Load all
+      </Button>
+    {/if}
   </div>
 </section>
