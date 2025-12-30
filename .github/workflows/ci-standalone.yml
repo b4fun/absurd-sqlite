@@ -1,0 +1,42 @@
+name: Standalone App CI
+
+on:
+  pull_request:
+    paths:
+      - standalone/**
+      - Cargo.toml
+      - Cargo.lock
+      - .github/workflows/ci-standalone.yml
+
+jobs:
+  lint-format-test:
+    name: Lint, Format, Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Frontend install
+        working-directory: standalone
+        run: bun install --frozen-lockfile
+
+      - name: Frontend check
+        working-directory: standalone
+        run: bun check
+
+      - name: Backend format check
+        run: cargo fmt -p AbsurdSQLite -- --check
+
+      - name: Backend lint
+        run: cargo clippy -p AbsurdSQLite -- -D warnings
+
+      - name: Backend tests
+        run: cargo test -p AbsurdSQLite
