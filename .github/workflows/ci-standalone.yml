@@ -36,6 +36,9 @@ jobs:
             libglib2.0-dev \
             pkg-config
 
+      - name: Build SQLite extension
+        run: cargo build -p absurd_sqlite_extension
+
       - name: Frontend install
         working-directory: standalone
         run: bun install --frozen-lockfile
