@@ -321,7 +321,9 @@ impl<'a> TauriDataProvider<'a> {
 
         let total_count: i64 = self
             .conn
-            .query_row(&count_sql, params_from_iter(params.iter()), |row| row.get(0))
+            .query_row(&count_sql, params_from_iter(params.iter()), |row| {
+                row.get(0)
+            })
             .unwrap_or(0);
 
         let limit = filters.limit.unwrap_or(500);
@@ -366,8 +368,8 @@ impl<'a> TauriDataProvider<'a> {
     }
 
     pub fn get_task_name_options(&self, queue_name: Option<&str>) -> Result<Vec<String>> {
-        let queue_filter = queue_name
-            .filter(|value| !value.is_empty() && value.to_lowercase() != "all queues");
+        let queue_filter =
+            queue_name.filter(|value| !value.is_empty() && value.to_lowercase() != "all queues");
         let (sql, params) = if let Some(queue) = queue_filter {
             (
                 "select distinct task_name from absurd_tasks where queue_name = ? order by task_name",
@@ -572,9 +574,7 @@ impl<'a> TauriDataProvider<'a> {
             .optional()?;
 
         let (latest_version, latest_applied_at) = match latest {
-            Some((version, applied_time)) => {
-                (Some(version), Some(format_datetime(applied_time)))
-            }
+            Some((version, applied_time)) => (Some(version), Some(format_datetime(applied_time))),
             None => (None, None),
         };
 
@@ -602,7 +602,9 @@ impl<'a> TauriDataProvider<'a> {
             "select id, introduced_version, applied_time from absurd_migration_records() order by id",
         )?;
         let applied_rows = stmt
-            .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get(1)?, row.get(2)?)))?
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get(1)?, row.get(2)?))
+            })?
             .collect::<std::result::Result<Vec<(i64, String, i64)>, _>>()?;
 
         let mut applied_map: HashMap<i64, (String, i64)> = HashMap::new();
@@ -653,9 +655,11 @@ impl<'a> TauriDataProvider<'a> {
     }
 
     pub fn apply_migration(&self, migration_id: i64) -> Result<i64> {
-        let applied: i64 = self
-            .conn
-            .query_row("select absurd_apply_migrations(?1)", [migration_id], |row| row.get(0))?;
+        let applied: i64 = self.conn.query_row(
+            "select absurd_apply_migrations(?1)",
+            [migration_id],
+            |row| row.get(0),
+        )?;
         Ok(applied)
     }
 
@@ -976,7 +980,10 @@ fn read_known_migrations() -> Vec<MigrationFile> {
             Some(name) => name,
             None => continue,
         };
-        let stem = match Path::new(filename).file_stem().and_then(|name| name.to_str()) {
+        let stem = match Path::new(filename)
+            .file_stem()
+            .and_then(|name| name.to_str())
+        {
             Some(stem) => stem,
             None => continue,
         };
@@ -1214,7 +1221,9 @@ pub fn get_migrations(
     app_handle: AppHandle,
     db_handle: State<DatabaseHandle>,
 ) -> Result<Vec<MigrationEntry>, String> {
-    with_provider(&app_handle, &db_handle, |provider| provider.get_migrations())
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_migrations()
+    })
 }
 
 #[tauri::command]
@@ -1222,7 +1231,9 @@ pub fn apply_migrations_all(
     app_handle: AppHandle,
     db_handle: State<DatabaseHandle>,
 ) -> Result<i64, String> {
-    with_provider(&app_handle, &db_handle, |provider| provider.apply_migrations_all())
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.apply_migrations_all()
+    })
 }
 
 #[tauri::command]
@@ -1231,7 +1242,9 @@ pub fn apply_migration(
     app_handle: AppHandle,
     db_handle: State<DatabaseHandle>,
 ) -> Result<i64, String> {
-    with_provider(&app_handle, &db_handle, |provider| provider.apply_migration(migration_id))
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.apply_migration(migration_id)
+    })
 }
 
 fn with_provider<T>(

@@ -266,9 +266,9 @@ const trpcQuery = async <T>(procedure: string, input?: unknown): Promise<T> => {
   if (!client) {
     throw new Error("Dev API server not available");
   }
-  const caller = (client as Record<string, { query: (value?: unknown) => Promise<T> }>)[
-    procedure
-  ];
+  const caller = (
+    client as unknown as Record<string, { query: (value?: unknown) => Promise<T> }>
+  )[procedure];
   if (!caller?.query) {
     throw new Error(`Unknown tRPC query ${procedure}`);
   }
@@ -280,9 +280,9 @@ const trpcMutation = async <T>(procedure: string, input?: unknown): Promise<T> =
   if (!client) {
     throw new Error("Dev API server not available");
   }
-  const caller = (client as Record<string, { mutate: (value?: unknown) => Promise<T> }>)[
-    procedure
-  ];
+  const caller = (
+    client as unknown as Record<string, { mutate: (value?: unknown) => Promise<T> }>
+  )[procedure];
   if (!caller?.mutate) {
     throw new Error(`Unknown tRPC mutation ${procedure}`);
   }

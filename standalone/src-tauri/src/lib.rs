@@ -1,4 +1,3 @@
-use log;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::{async_runtime, Manager};
 use tauri_plugin_cli::CliExt;

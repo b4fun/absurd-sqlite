@@ -36,6 +36,14 @@ $ cargo fmt -p AbsurdSQLite -- --check
 $ cargo clippy -p AbsurdSQLite -- -D warnings
 ```
 
+### Code Testing
+
+To run the tests for the SQLite extension, use:
+
+```bash
+$ cargo test -p AbsurdSQLite
+```
+
 ## SQLite Extension
 
 This project depends on the [`absurd-sqlite-extension`](../absurd-sqlite-extension/) for the core SQLite extension logic.

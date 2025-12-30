@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use log;
 use rusqlite::Connection;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -40,7 +39,7 @@ impl DatabaseHandle {
         if let Some(arg_data) = path {
             if let Value::String(db_path) = &arg_data.value {
                 log::info!("Opening database from CLI arg: {}", db_path);
-                return Self::from_path(&db_path);
+                return Self::from_path(db_path);
             }
         }
 

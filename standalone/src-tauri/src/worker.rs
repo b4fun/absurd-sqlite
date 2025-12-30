@@ -1,5 +1,4 @@
 use anyhow::Result;
-use log;
 use tauri::AppHandle;
 use tauri_plugin_shell::{process::CommandEvent, ShellExt};
 
@@ -8,9 +7,9 @@ pub async fn spawn_worker(handle: &AppHandle) -> Result<()> {
 
     log::info!("Spawning worker.....");
 
-    let (mut rx, mut child) = shell
+    let (mut rx, _child) = shell
         .command("node")
-        .args(&["./worker.js"])
+        .args(["./worker.js"])
         .spawn()
         .expect("failed to spawn worker");
 

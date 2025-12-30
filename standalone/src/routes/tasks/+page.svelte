@@ -20,13 +20,14 @@
     "sleeping",
     "pending",
     "cancelled",
-  ];
+  ] as const;
+  type StatusOption = (typeof statusOptions)[number];
   let queueOptions = $state<string[]>([]);
   let taskNameOptions = $state<string[]>([allTaskNamesLabel]);
   const urlQueue = $derived(page.url.searchParams.get("queue") ?? allQueuesLabel);
   const urlSearch = $derived(page.url.searchParams.get("q") ?? "");
   let selectedQueue = $state(allQueuesLabel);
-  let selectedStatus = $state(allStatusesLabel);
+  let selectedStatus = $state<StatusOption>(allStatusesLabel);
   let selectedTaskName = $state(allTaskNamesLabel);
   let lastUrlQueue = $state(allQueuesLabel);
   let searchTerm = $state("");
