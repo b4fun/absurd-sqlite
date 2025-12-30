@@ -35,7 +35,7 @@ struct ClaimResult {
 
 fn parse_claim_args(values: &[*mut sqlite3_value]) -> Result<ClaimArgs> {
     let queue_name =
-        api::value_text_notnull(values.get(0).expect("queue_name is required"))?.to_string();
+        api::value_text_notnull(values.first().expect("queue_name is required"))?.to_string();
     validate::queue_name(&queue_name)?;
 
     let worker_id = values
@@ -164,44 +164,44 @@ fn expire_claims(db: *mut sqlite3, queue_name: &str, now: i64) -> Result<()> {
             and r.claim_expires_at <= cast(?2 as integer)",
     )
     .map_err(|err| {
-        Error::new_message(&format!("failed to prepare expired claim query: {:?}", err))
+        Error::new_message(format!("failed to prepare expired claim query: {:?}", err))
     })?;
     stmt.bind_text(1, queue_name)
-        .map_err(|err| Error::new_message(&format!("failed to bind queue_name: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
     stmt.bind_text(2, &now_value)
-        .map_err(|err| Error::new_message(&format!("failed to bind now: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to bind now: {:?}", err)))?;
 
     for row in stmt.execute() {
         let row = row.map_err(|err| {
-            Error::new_message(&format!("failed to read expired claim row: {:?}", err))
+            Error::new_message(format!("failed to read expired claim row: {:?}", err))
         })?;
         let run_id = row
             .get::<String>(0)
-            .map_err(|err| Error::new_message(&format!("failed to read run_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read run_id: {:?}", err)))?;
         let task_id = row
             .get::<String>(1)
-            .map_err(|err| Error::new_message(&format!("failed to read task_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read task_id: {:?}", err)))?;
         let attempt = row
             .get::<i64>(2)
-            .map_err(|err| Error::new_message(&format!("failed to read attempt: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read attempt: {:?}", err)))?;
         let claimed_by = row
             .get::<String>(3)
-            .map_err(|err| Error::new_message(&format!("failed to read claimed_by: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read claimed_by: {:?}", err)))?;
         let claim_expires_at = row.get::<i64>(4).map_err(|err| {
-            Error::new_message(&format!("failed to read claim_expires_at: {:?}", err))
+            Error::new_message(format!("failed to read claim_expires_at: {:?}", err))
         })?;
         let retry_strategy = row.get::<String>(5).map_err(|err| {
-            Error::new_message(&format!("failed to read retry_strategy: {:?}", err))
+            Error::new_message(format!("failed to read retry_strategy: {:?}", err))
         })?;
-        let max_attempts = row.get::<i64>(6).map_err(|err| {
-            Error::new_message(&format!("failed to read max_attempts: {:?}", err))
-        })?;
+        let max_attempts = row
+            .get::<i64>(6)
+            .map_err(|err| Error::new_message(format!("failed to read max_attempts: {:?}", err)))?;
         let first_started_at = row.get::<i64>(7).map_err(|err| {
-            Error::new_message(&format!("failed to read first_started_at: {:?}", err))
+            Error::new_message(format!("failed to read first_started_at: {:?}", err))
         })?;
-        let cancellation = row.get::<String>(8).map_err(|err| {
-            Error::new_message(&format!("failed to read cancellation: {:?}", err))
-        })?;
+        let cancellation = row
+            .get::<String>(8)
+            .map_err(|err| Error::new_message(format!("failed to read cancellation: {:?}", err)))?;
 
         let failure_reason = serde_json::json!({
             "name": "$ClaimTimeout",
@@ -240,7 +240,7 @@ fn expire_claims(db: *mut sqlite3, queue_name: &str, now: i64) -> Result<()> {
         } else {
             Some(max_attempts)
         };
-        let allow_retry = max_attempts_opt.map_or(true, |max| next_attempt <= max);
+        let allow_retry = max_attempts_opt.is_none_or(|max| next_attempt <= max);
         let mut task_state = "failed";
         let mut last_attempt_run = run_id.clone();
         let mut cancelled_at = "";
@@ -372,51 +372,51 @@ fn select_candidates(
           order by r.available_at, r.run_id
           limit cast(?3 as integer)",
     )
-    .map_err(|err| Error::new_message(&format!("failed to prepare claim query: {:?}", err)))?;
+    .map_err(|err| Error::new_message(format!("failed to prepare claim query: {:?}", err)))?;
 
     stmt.bind_text(1, queue_name)
-        .map_err(|err| Error::new_message(&format!("failed to bind queue_name: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
     stmt.bind_text(2, &now_value)
-        .map_err(|err| Error::new_message(&format!("failed to bind now: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to bind now: {:?}", err)))?;
     stmt.bind_text(3, &qty_value)
-        .map_err(|err| Error::new_message(&format!("failed to bind qty: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to bind qty: {:?}", err)))?;
 
     let mut results = Vec::new();
     for row in stmt.execute() {
         let row =
-            row.map_err(|err| Error::new_message(&format!("failed to read row: {:?}", err)))?;
+            row.map_err(|err| Error::new_message(format!("failed to read row: {:?}", err)))?;
         let run_id = row
             .get::<String>(0)
-            .map_err(|err| Error::new_message(&format!("failed to read run_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read run_id: {:?}", err)))?;
         let task_id = row
             .get::<String>(1)
-            .map_err(|err| Error::new_message(&format!("failed to read task_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read task_id: {:?}", err)))?;
         let attempt = row
             .get::<i64>(2)
-            .map_err(|err| Error::new_message(&format!("failed to read attempt: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read attempt: {:?}", err)))?;
         let run_state = row
             .get::<String>(3)
-            .map_err(|err| Error::new_message(&format!("failed to read run_state: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read run_state: {:?}", err)))?;
         let task_name = row
             .get::<String>(4)
-            .map_err(|err| Error::new_message(&format!("failed to read task_name: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read task_name: {:?}", err)))?;
         let params = row
             .get::<String>(5)
-            .map_err(|err| Error::new_message(&format!("failed to read params: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read params: {:?}", err)))?;
         let retry_strategy_raw = row.get::<String>(6).map_err(|err| {
-            Error::new_message(&format!("failed to read retry_strategy: {:?}", err))
+            Error::new_message(format!("failed to read retry_strategy: {:?}", err))
         })?;
-        let max_attempts_raw = row.get::<i64>(7).map_err(|err| {
-            Error::new_message(&format!("failed to read max_attempts: {:?}", err))
-        })?;
+        let max_attempts_raw = row
+            .get::<i64>(7)
+            .map_err(|err| Error::new_message(format!("failed to read max_attempts: {:?}", err)))?;
         let headers_raw = row
             .get::<String>(8)
-            .map_err(|err| Error::new_message(&format!("failed to read headers: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read headers: {:?}", err)))?;
         let wake_event_raw = row
             .get::<String>(9)
-            .map_err(|err| Error::new_message(&format!("failed to read wake_event: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read wake_event: {:?}", err)))?;
         let event_payload_raw = row.get::<String>(10).map_err(|err| {
-            Error::new_message(&format!("failed to read event_payload: {:?}", err))
+            Error::new_message(format!("failed to read event_payload: {:?}", err))
         })?;
 
         results.push(ClaimResult {

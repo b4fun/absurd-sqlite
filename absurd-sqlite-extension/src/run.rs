@@ -18,19 +18,17 @@ fn parse_optional_time_ms(value: &*mut sqlite3_value, label: &str) -> Result<Opt
             let raw = api::value_text(value).unwrap_or("").trim();
             if raw.is_empty() {
                 Ok(None)
+            } else if let Ok(parsed) = raw.parse::<i64>() {
+                Ok(Some(parsed))
+            } else if let Ok(parsed) = DateTime::parse_from_rfc3339(raw) {
+                Ok(Some(parsed.timestamp_millis()))
             } else {
-                if let Ok(parsed) = raw.parse::<i64>() {
-                    Ok(Some(parsed))
-                } else if let Ok(parsed) = DateTime::parse_from_rfc3339(raw) {
-                    Ok(Some(parsed.timestamp_millis()))
-                } else {
-                    Err(Error::new_message(&format!(
-                        "{label} must be integer ms or RFC3339"
-                    )))
-                }
+                Err(Error::new_message(format!(
+                    "{label} must be integer ms or RFC3339"
+                )))
             }
         }
-        _ => Err(Error::new_message(&format!(
+        _ => Err(Error::new_message(format!(
             "{label} must be integer ms or RFC3339"
         ))),
     }
@@ -38,7 +36,7 @@ fn parse_optional_time_ms(value: &*mut sqlite3_value, label: &str) -> Result<Opt
 
 fn parse_required_int(value: &*mut sqlite3_value, label: &str) -> Result<i64> {
     if api::value_is_null(value) {
-        return Err(Error::new_message(&format!("{label} must be provided")));
+        return Err(Error::new_message(format!("{label} must be provided")));
     }
     match api::value_type(value) {
         api::ValueType::Integer => Ok(api::value_int64(value)),
@@ -46,14 +44,14 @@ fn parse_required_int(value: &*mut sqlite3_value, label: &str) -> Result<i64> {
         api::ValueType::Text => {
             let raw = api::value_text(value).unwrap_or("").trim();
             if raw.is_empty() {
-                Err(Error::new_message(&format!("{label} must be provided")))
+                Err(Error::new_message(format!("{label} must be provided")))
             } else {
                 raw.parse::<i64>().map_err(|err| {
-                    Error::new_message(&format!("{label} must be integer: {:?}", err))
+                    Error::new_message(format!("{label} must be integer: {:?}", err))
                 })
             }
         }
-        _ => Err(Error::new_message(&format!("{label} must be integer",))),
+        _ => Err(Error::new_message(format!("{label} must be integer",))),
     }
 }
 
@@ -91,7 +89,7 @@ fn fail_run_impl(
 ) -> Result<()> {
     validate::queue_name(queue_name)?;
     let _: JsonValue = serde_json::from_str(reason)
-        .map_err(|err| Error::new_message(&format!("reason must be valid JSON: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("reason must be valid JSON: {:?}", err)))?;
 
     let now = sql::now_ms_from_db(db);
     let now_value = now.to_string();
@@ -108,22 +106,22 @@ fn fail_run_impl(
                 and run_id = ?2
                 and state in ('running','sleeping')",
         )
-        .map_err(|err| Error::new_message(&format!("failed to prepare run lookup: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to prepare run lookup: {:?}", err)))?;
         stmt.bind_text(1, queue_name)
-            .map_err(|err| Error::new_message(&format!("failed to bind queue_name: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
         stmt.bind_text(2, run_id)
-            .map_err(|err| Error::new_message(&format!("failed to bind run_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind run_id: {:?}", err)))?;
         let mut rows = stmt.execute();
         let row = rows
             .next()
             .ok_or_else(|| Error::new_message("run not found or not active"))?
-            .map_err(|err| Error::new_message(&format!("failed to read run row: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read run row: {:?}", err)))?;
         let task_id = row
             .get::<String>(0)
-            .map_err(|err| Error::new_message(&format!("failed to read task_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read task_id: {:?}", err)))?;
         let attempt = row
             .get::<i64>(1)
-            .map_err(|err| Error::new_message(&format!("failed to read attempt: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read attempt: {:?}", err)))?;
 
         let mut task_stmt = sqlite_loadable::exec::Statement::prepare(
             db,
@@ -135,30 +133,30 @@ fn fail_run_impl(
               where queue_name = ?1
                 and task_id = ?2",
         )
-        .map_err(|err| Error::new_message(&format!("failed to prepare task lookup: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to prepare task lookup: {:?}", err)))?;
         task_stmt
             .bind_text(1, queue_name)
-            .map_err(|err| Error::new_message(&format!("failed to bind queue_name: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
         task_stmt
             .bind_text(2, &task_id)
-            .map_err(|err| Error::new_message(&format!("failed to bind task_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind task_id: {:?}", err)))?;
         let mut task_rows = task_stmt.execute();
         let task_row = task_rows
             .next()
             .ok_or_else(|| Error::new_message("task not found"))?
-            .map_err(|err| Error::new_message(&format!("failed to read task row: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read task row: {:?}", err)))?;
         let retry_strategy = task_row.get::<String>(0).map_err(|err| {
-            Error::new_message(&format!("failed to read retry_strategy: {:?}", err))
+            Error::new_message(format!("failed to read retry_strategy: {:?}", err))
         })?;
-        let max_attempts = task_row.get::<i64>(1).map_err(|err| {
-            Error::new_message(&format!("failed to read max_attempts: {:?}", err))
-        })?;
+        let max_attempts = task_row
+            .get::<i64>(1)
+            .map_err(|err| Error::new_message(format!("failed to read max_attempts: {:?}", err)))?;
         let first_started_at = task_row.get::<i64>(2).map_err(|err| {
-            Error::new_message(&format!("failed to read first_started_at: {:?}", err))
+            Error::new_message(format!("failed to read first_started_at: {:?}", err))
         })?;
-        let cancellation = task_row.get::<String>(3).map_err(|err| {
-            Error::new_message(&format!("failed to read cancellation: {:?}", err))
-        })?;
+        let cancellation = task_row
+            .get::<String>(3)
+            .map_err(|err| Error::new_message(format!("failed to read cancellation: {:?}", err)))?;
 
         sql::exec_with_bind_text(
             db,
@@ -180,7 +178,7 @@ fn fail_run_impl(
         } else {
             Some(max_attempts)
         };
-        let allow_retry = max_attempts_opt.map_or(true, |max| next_attempt <= max);
+        let allow_retry = max_attempts_opt.is_none_or(|max| next_attempt <= max);
         let mut task_state = "failed";
         let mut last_attempt_run = run_id.to_string();
         let mut cancelled_at = "";
@@ -306,7 +304,7 @@ pub fn absurd_complete_run(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
 ) -> Result<()> {
-    let queue_name = api::value_text_notnull(values.get(0).expect("queue_name"))?;
+    let queue_name = api::value_text_notnull(values.first().expect("queue_name"))?;
     let run_id = api::value_text_notnull(values.get(1).expect("run_id"))?;
     let state_value = values.get(2);
     let state_text = state_value
@@ -326,7 +324,7 @@ pub fn absurd_complete_run(
 
     if !state_text.is_empty() {
         let _: JsonValue = serde_json::from_str(&state_text)
-            .map_err(|err| Error::new_message(&format!("state must be valid JSON: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("state must be valid JSON: {:?}", err)))?;
     }
 
     validate::queue_name(queue_name)?;
@@ -343,22 +341,22 @@ pub fn absurd_complete_run(
               where queue_name = ?1
                 and run_id = ?2",
         )
-        .map_err(|err| Error::new_message(&format!("failed to prepare run lookup: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to prepare run lookup: {:?}", err)))?;
         stmt.bind_text(1, queue_name)
-            .map_err(|err| Error::new_message(&format!("failed to bind queue_name: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
         stmt.bind_text(2, run_id)
-            .map_err(|err| Error::new_message(&format!("failed to bind run_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind run_id: {:?}", err)))?;
         let mut rows = stmt.execute();
         let row = rows
             .next()
             .ok_or_else(|| Error::new_message("run not found"))?
-            .map_err(|err| Error::new_message(&format!("failed to read run row: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read run row: {:?}", err)))?;
         let task_id = row
             .get::<String>(0)
-            .map_err(|err| Error::new_message(&format!("failed to read task_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read task_id: {:?}", err)))?;
         let run_state = row
             .get::<String>(1)
-            .map_err(|err| Error::new_message(&format!("failed to read state: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read state: {:?}", err)))?;
 
         if run_state != "running" {
             return Err(Error::new_message("run is not currently running"));
@@ -410,7 +408,7 @@ pub fn absurd_complete_run(
 }
 
 pub fn absurd_fail_run(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
-    let queue_name = api::value_text_notnull(values.get(0).expect("queue_name"))?;
+    let queue_name = api::value_text_notnull(values.first().expect("queue_name"))?;
     let run_id = api::value_text_notnull(values.get(1).expect("run_id"))?;
     let reason = api::value_text_notnull(values.get(2).expect("reason"))?;
     let retry_at = values
@@ -428,7 +426,7 @@ pub fn absurd_fail_run_no_retry(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
 ) -> Result<()> {
-    let queue_name = api::value_text_notnull(values.get(0).expect("queue_name"))?;
+    let queue_name = api::value_text_notnull(values.first().expect("queue_name"))?;
     let run_id = api::value_text_notnull(values.get(1).expect("run_id"))?;
     let reason = api::value_text_notnull(values.get(2).expect("reason"))?;
     let db = api::context_db_handle(context);
@@ -440,7 +438,7 @@ pub fn absurd_extend_claim(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
 ) -> Result<()> {
-    let queue_name = api::value_text_notnull(values.get(0).expect("queue_name"))?;
+    let queue_name = api::value_text_notnull(values.first().expect("queue_name"))?;
     let run_id = api::value_text_notnull(values.get(1).expect("run_id"))?;
     let extend_by = parse_required_int(values.get(2).expect("extend_by"), "extend_by")?;
 
@@ -463,19 +461,19 @@ pub fn absurd_extend_claim(
               where r.queue_name = ?1
                 and r.run_id = ?2",
         )
-        .map_err(|err| Error::new_message(&format!("failed to prepare task lookup: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to prepare task lookup: {:?}", err)))?;
         stmt.bind_text(1, queue_name)
-            .map_err(|err| Error::new_message(&format!("failed to bind queue_name: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
         stmt.bind_text(2, run_id)
-            .map_err(|err| Error::new_message(&format!("failed to bind run_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind run_id: {:?}", err)))?;
         let mut rows = stmt.execute();
         let row = rows
             .next()
             .ok_or_else(|| Error::new_message("run not found"))?
-            .map_err(|err| Error::new_message(&format!("failed to read task row: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read task row: {:?}", err)))?;
         let task_state = row
             .get::<String>(0)
-            .map_err(|err| Error::new_message(&format!("failed to read state: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read state: {:?}", err)))?;
 
         if task_state == "cancelled" {
             return Err(Error::new_message("Task has been cancelled"));
@@ -516,7 +514,7 @@ pub fn absurd_schedule_run(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
 ) -> Result<()> {
-    let queue_name = api::value_text_notnull(values.get(0).expect("queue_name"))?;
+    let queue_name = api::value_text_notnull(values.first().expect("queue_name"))?;
     let run_id = api::value_text_notnull(values.get(1).expect("run_id"))?;
     let wake_at = parse_optional_time_ms(values.get(2).expect("wake_at"), "wake_at")?
         .ok_or_else(|| Error::new_message("wake_at must be provided"))?;
@@ -534,19 +532,19 @@ pub fn absurd_schedule_run(
                 and run_id = ?2
                 and state = 'running'",
         )
-        .map_err(|err| Error::new_message(&format!("failed to prepare run lookup: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to prepare run lookup: {:?}", err)))?;
         stmt.bind_text(1, queue_name)
-            .map_err(|err| Error::new_message(&format!("failed to bind queue_name: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
         stmt.bind_text(2, run_id)
-            .map_err(|err| Error::new_message(&format!("failed to bind run_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind run_id: {:?}", err)))?;
         let mut rows = stmt.execute();
         let row = rows
             .next()
             .ok_or_else(|| Error::new_message("run not running"))?
-            .map_err(|err| Error::new_message(&format!("failed to read run row: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read run row: {:?}", err)))?;
         let task_id = row
             .get::<String>(0)
-            .map_err(|err| Error::new_message(&format!("failed to read task_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read task_id: {:?}", err)))?;
 
         let wake_at_value = wake_at.to_string();
         sql::exec_with_bind_text(
@@ -590,7 +588,7 @@ pub fn absurd_cleanup_tasks(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
 ) -> Result<()> {
-    let queue_name = api::value_text_notnull(values.get(0).expect("queue_name"))?;
+    let queue_name = api::value_text_notnull(values.first().expect("queue_name"))?;
     let ttl_seconds = parse_required_ttl_secs(values.get(1).expect("ttl_seconds"), "ttl_seconds")?;
     let limit = parse_optional_limit(values.get(2).copied())?;
 
@@ -628,29 +626,25 @@ pub fn absurd_cleanup_tasks(
               limit cast(?3 as integer)",
         )
         .map_err(|err| {
-            Error::new_message(&format!(
-                "failed to prepare cleanup_tasks select: {:?}",
-                err
-            ))
+            Error::new_message(format!("failed to prepare cleanup_tasks select: {:?}", err))
         })?;
         select_stmt
             .bind_text(1, queue_name)
-            .map_err(|err| Error::new_message(&format!("failed to bind queue_name: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
         select_stmt
             .bind_text(2, &cutoff_value)
-            .map_err(|err| Error::new_message(&format!("failed to bind cutoff: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind cutoff: {:?}", err)))?;
         select_stmt
             .bind_text(3, &limit_value)
-            .map_err(|err| Error::new_message(&format!("failed to bind limit: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind limit: {:?}", err)))?;
 
         let mut task_ids = Vec::new();
         for row in select_stmt.execute() {
-            let row = row.map_err(|err| {
-                Error::new_message(&format!("failed to read task row: {:?}", err))
-            })?;
+            let row = row
+                .map_err(|err| Error::new_message(format!("failed to read task row: {:?}", err)))?;
             let task_id = row
                 .get::<String>(0)
-                .map_err(|err| Error::new_message(&format!("failed to read task_id: {:?}", err)))?;
+                .map_err(|err| Error::new_message(format!("failed to read task_id: {:?}", err)))?;
             task_ids.push(task_id);
         }
         drop(select_stmt);
@@ -694,7 +688,7 @@ pub fn absurd_cleanup_events(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
 ) -> Result<()> {
-    let queue_name = api::value_text_notnull(values.get(0).expect("queue_name"))?;
+    let queue_name = api::value_text_notnull(values.first().expect("queue_name"))?;
     let ttl_seconds = parse_required_ttl_secs(values.get(1).expect("ttl_seconds"), "ttl_seconds")?;
     let limit = parse_optional_limit(values.get(2).copied())?;
 
@@ -718,28 +712,28 @@ pub fn absurd_cleanup_events(
               limit cast(?3 as integer)",
         )
         .map_err(|err| {
-            Error::new_message(&format!(
+            Error::new_message(format!(
                 "failed to prepare cleanup_events select: {:?}",
                 err
             ))
         })?;
         select_stmt
             .bind_text(1, queue_name)
-            .map_err(|err| Error::new_message(&format!("failed to bind queue_name: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
         select_stmt
             .bind_text(2, &cutoff_value)
-            .map_err(|err| Error::new_message(&format!("failed to bind cutoff: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind cutoff: {:?}", err)))?;
         select_stmt
             .bind_text(3, &limit_value)
-            .map_err(|err| Error::new_message(&format!("failed to bind limit: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind limit: {:?}", err)))?;
 
         let mut deleted_count = 0;
         for row in select_stmt.execute() {
             let row = row.map_err(|err| {
-                Error::new_message(&format!("failed to read event row: {:?}", err))
+                Error::new_message(format!("failed to read event row: {:?}", err))
             })?;
             let event_name = row.get::<String>(0).map_err(|err| {
-                Error::new_message(&format!("failed to read event_name: {:?}", err))
+                Error::new_message(format!("failed to read event_name: {:?}", err))
             })?;
             sql::exec_with_bind_text(
                 db,
@@ -775,7 +769,7 @@ pub fn absurd_cancel_task(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
 ) -> Result<()> {
-    let queue_name = api::value_text_notnull(values.get(0).expect("queue_name"))?;
+    let queue_name = api::value_text_notnull(values.first().expect("queue_name"))?;
     let task_id = api::value_text_notnull(values.get(1).expect("task_id"))?;
 
     validate::queue_name(queue_name)?;
@@ -792,19 +786,19 @@ pub fn absurd_cancel_task(
               where queue_name = ?1
                 and task_id = ?2",
         )
-        .map_err(|err| Error::new_message(&format!("failed to prepare task lookup: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to prepare task lookup: {:?}", err)))?;
         stmt.bind_text(1, queue_name)
-            .map_err(|err| Error::new_message(&format!("failed to bind queue_name: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
         stmt.bind_text(2, task_id)
-            .map_err(|err| Error::new_message(&format!("failed to bind task_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind task_id: {:?}", err)))?;
         let mut rows = stmt.execute();
         let row = rows
             .next()
             .ok_or_else(|| Error::new_message("Task not found"))?
-            .map_err(|err| Error::new_message(&format!("failed to read task row: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read task row: {:?}", err)))?;
         let task_state = row
             .get::<String>(0)
-            .map_err(|err| Error::new_message(&format!("failed to read task state: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read task state: {:?}", err)))?;
 
         if task_state == "completed" || task_state == "failed" || task_state == "cancelled" {
             return Ok(());

@@ -1,30 +1,32 @@
-use sqlite_loadable::prelude::*;
 use sqlite_loadable::exec::Statement;
-use sqlite_loadable::{define_scalar_function, define_table_function, Error, FunctionFlags, Result};
+use sqlite_loadable::prelude::*;
+use sqlite_loadable::{
+    define_scalar_function, define_table_function, Error, FunctionFlags, Result,
+};
 
-mod spawn;
-mod claim;
-mod retry;
-mod run;
 mod checkpoint;
+mod claim;
 mod event;
-mod sql;
 mod migrate;
 mod migrations;
 mod queue;
+mod retry;
+mod run;
 mod settings;
+mod spawn;
+mod sql;
 mod validate;
 
 fn absurd_version(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<()> {
     let version = env!("CARGO_PKG_VERSION");
-    sqlite_loadable::api::result_text(context, &format!("absurd-sqlite/{}", version))?;
+    sqlite_loadable::api::result_text(context, format!("absurd-sqlite/{}", version))?;
     Ok(())
 }
 
 // NOTE: jsonb() is provided by SQLite 3.45+. No local shim needed.
 fn absurd_create_queue(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let queue_name =
-        sqlite_loadable::api::value_text_notnull(values.get(0).expect("queue_name is required"))?;
+        sqlite_loadable::api::value_text_notnull(values.first().expect("queue_name is required"))?;
     validate::queue_name(queue_name)?;
 
     let db = sqlite_loadable::api::context_db_handle(context);
@@ -39,7 +41,7 @@ fn absurd_create_queue(context: *mut sqlite3_context, values: &[*mut sqlite3_val
 
 fn absurd_drop_queue(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let queue_name =
-        sqlite_loadable::api::value_text_notnull(values.get(0).expect("queue_name is required"))?;
+        sqlite_loadable::api::value_text_notnull(values.first().expect("queue_name is required"))?;
     validate::queue_name(queue_name)?;
 
     let db = sqlite_loadable::api::context_db_handle(context);
@@ -66,15 +68,63 @@ fn absurd_init(db: *mut sqlite3) -> Result<()> {
     define_scalar_function(db, "absurd_version", 0, absurd_version, flags)?;
     define_scalar_function(db, "absurd_create_queue", 1, absurd_create_queue, flags)?;
     define_scalar_function(db, "absurd_drop_queue", 1, absurd_drop_queue, flags)?;
-    define_scalar_function(db, "absurd_complete_run", 3, run::absurd_complete_run, flags)?;
-    define_scalar_function(db, "absurd_schedule_run", 3, run::absurd_schedule_run, flags)?;
-    define_scalar_function(db, "absurd_fail_run", 3, run::absurd_fail_run_no_retry, flags)?;
+    define_scalar_function(
+        db,
+        "absurd_complete_run",
+        3,
+        run::absurd_complete_run,
+        flags,
+    )?;
+    define_scalar_function(
+        db,
+        "absurd_schedule_run",
+        3,
+        run::absurd_schedule_run,
+        flags,
+    )?;
+    define_scalar_function(
+        db,
+        "absurd_fail_run",
+        3,
+        run::absurd_fail_run_no_retry,
+        flags,
+    )?;
     define_scalar_function(db, "absurd_fail_run", 4, run::absurd_fail_run, flags)?;
-    define_scalar_function(db, "absurd_extend_claim", 3, run::absurd_extend_claim, flags)?;
-    define_scalar_function(db, "absurd_cleanup_tasks", 2, run::absurd_cleanup_tasks, flags)?;
-    define_scalar_function(db, "absurd_cleanup_tasks", 3, run::absurd_cleanup_tasks, flags)?;
-    define_scalar_function(db, "absurd_cleanup_events", 2, run::absurd_cleanup_events, flags)?;
-    define_scalar_function(db, "absurd_cleanup_events", 3, run::absurd_cleanup_events, flags)?;
+    define_scalar_function(
+        db,
+        "absurd_extend_claim",
+        3,
+        run::absurd_extend_claim,
+        flags,
+    )?;
+    define_scalar_function(
+        db,
+        "absurd_cleanup_tasks",
+        2,
+        run::absurd_cleanup_tasks,
+        flags,
+    )?;
+    define_scalar_function(
+        db,
+        "absurd_cleanup_tasks",
+        3,
+        run::absurd_cleanup_tasks,
+        flags,
+    )?;
+    define_scalar_function(
+        db,
+        "absurd_cleanup_events",
+        2,
+        run::absurd_cleanup_events,
+        flags,
+    )?;
+    define_scalar_function(
+        db,
+        "absurd_cleanup_events",
+        3,
+        run::absurd_cleanup_events,
+        flags,
+    )?;
     define_scalar_function(db, "absurd_cancel_task", 2, run::absurd_cancel_task, flags)?;
     define_scalar_function(
         db,
@@ -179,9 +229,7 @@ mod tests {
     #[test]
     fn test_absurd_version() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -193,15 +241,16 @@ mod tests {
             .query_row("select absurd_version()", [], |row| row.get(0))
             .unwrap();
 
-        assert_eq!(result, format!("absurd-sqlite/{}", env!("CARGO_PKG_VERSION")));
+        assert_eq!(
+            result,
+            format!("absurd-sqlite/{}", env!("CARGO_PKG_VERSION"))
+        );
     }
 
     #[test]
     fn test_apply_migrations_and_records() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -211,9 +260,11 @@ mod tests {
         assert!(applied >= 1);
 
         let count: i64 = conn
-            .query_row("select count(*) from absurd_migration_records()", [], |row| {
-                row.get(0)
-            })
+            .query_row(
+                "select count(*) from absurd_migration_records()",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert!(count >= 1);
 
@@ -241,9 +292,7 @@ mod tests {
     #[test]
     fn test_set_fake_now() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -270,9 +319,7 @@ mod tests {
     #[test]
     fn test_apply_migrations_to_target() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -285,9 +332,7 @@ mod tests {
     #[test]
     fn test_list_queues() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -305,9 +350,7 @@ mod tests {
         let mut stmt = conn
             .prepare("select queue_name from absurd_list_queues() order by queue_name")
             .unwrap();
-        let rows = stmt
-            .query_map([], |row| row.get::<_, String>(0))
-            .unwrap();
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0)).unwrap();
         let queues: Vec<String> = rows.map(|row| row.unwrap()).collect();
         assert_eq!(queues, vec!["alpha".to_string(), "beta".to_string()]);
     }
@@ -315,9 +358,7 @@ mod tests {
     #[test]
     fn test_drop_queue() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -343,9 +384,7 @@ mod tests {
     #[test]
     fn test_spawn_task_basic() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -372,9 +411,7 @@ mod tests {
     #[test]
     fn test_claim_task_basic() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -421,9 +458,7 @@ mod tests {
     #[test]
     fn test_claim_task_json_outputs() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -469,9 +504,7 @@ mod tests {
     #[test]
     fn test_claim_task_params_decode_client_side() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -506,9 +539,7 @@ mod tests {
 
     fn table_column_types(conn: &Connection, table: &str) -> HashMap<String, String> {
         let pragma = format!("pragma table_xinfo({})", table);
-        let mut stmt = conn
-            .prepare(&pragma)
-            .expect("prepare table_xinfo");
+        let mut stmt = conn.prepare(&pragma).expect("prepare table_xinfo");
         let rows = stmt
             .query_map([], |row| {
                 let name: String = row.get(1)?;
@@ -527,9 +558,7 @@ mod tests {
     #[test]
     fn test_table_function_declared_types() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -599,9 +628,7 @@ mod tests {
     #[test]
     fn test_schedule_run_basic() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -661,9 +688,7 @@ mod tests {
     #[test]
     fn test_fail_run_basic() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -724,9 +749,7 @@ mod tests {
     #[test]
     fn test_complete_run_basic() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -787,9 +810,7 @@ mod tests {
     #[test]
     fn test_extend_claim_basic() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -847,9 +868,7 @@ mod tests {
     #[test]
     fn test_checkpoint_roundtrip() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -910,9 +929,7 @@ mod tests {
     #[test]
     fn test_await_and_emit_event() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -981,9 +998,7 @@ mod tests {
     #[test]
     fn test_cleanup_tasks_and_events() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -1027,11 +1042,9 @@ mod tests {
         .unwrap();
 
         let _: Option<i64> = conn
-            .query_row(
-                "select absurd_emit_event('alpha', 'eventA')",
-                [],
-                |r| r.get(0),
-            )
+            .query_row("select absurd_emit_event('alpha', 'eventA')", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         conn.execute(
             "update absurd_events set emitted_at = 1 where queue_name = 'alpha' and event_name = 'eventA'",
@@ -1040,20 +1053,16 @@ mod tests {
         .unwrap();
 
         let deleted_tasks: i64 = conn
-            .query_row(
-                "select absurd_cleanup_tasks('alpha', 1, 100)",
-                [],
-                |r| r.get(0),
-            )
+            .query_row("select absurd_cleanup_tasks('alpha', 1, 100)", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(deleted_tasks, 1);
 
         let deleted_events: i64 = conn
-            .query_row(
-                "select absurd_cleanup_events('alpha', 1, 100)",
-                [],
-                |r| r.get(0),
-            )
+            .query_row("select absurd_cleanup_events('alpha', 1, 100)", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(deleted_events, 1);
     }
@@ -1061,9 +1070,7 @@ mod tests {
     #[test]
     fn test_cancel_task_basic() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite3_absurd_init as *const (),
-            )));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -1084,11 +1091,9 @@ mod tests {
             .unwrap();
 
         let _: Option<i64> = conn
-            .query_row(
-                "select absurd_cancel_task('alpha', ?1)",
-                [&row.0],
-                |r| r.get(0),
-            )
+            .query_row("select absurd_cancel_task('alpha', ?1)", [&row.0], |r| {
+                r.get(0)
+            })
             .unwrap();
 
         let task_state: String = conn

@@ -27,4 +27,7 @@ To interact with the system, a SQLite extension is provided and exposed various 
 
 ## Development
 
+General rule: please make sure to lint, format, and test code after making changes. No need to ask for human confirmation
+before running linters / formatters / tests.
+
 Please follow the sub-project README.md / AGENTS.md for detailed instructions.

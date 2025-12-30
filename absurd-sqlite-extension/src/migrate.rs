@@ -26,14 +26,14 @@ fn parse_optional_int(value: Option<*mut sqlite3_value>) -> Result<Option<i64>> 
         api::ValueType::Integer => Ok(Some(api::value_int64(&value))),
         api::ValueType::Text => {
             let raw = api::value_text(&value)
-                .map_err(|err| Error::new_message(&format!("to must be integer: {:?}", err)))?
+                .map_err(|err| Error::new_message(format!("to must be integer: {:?}", err)))?
                 .trim();
             if raw.is_empty() {
                 return Ok(None);
             }
             raw.parse::<i64>()
                 .map(Some)
-                .map_err(|err| Error::new_message(&format!("to must be integer: {:?}", err)))
+                .map_err(|err| Error::new_message(format!("to must be integer: {:?}", err)))
         }
         _ => Err(Error::new_message("to must be integer")),
     }
@@ -47,7 +47,7 @@ pub fn absurd_apply_migrations(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
 ) -> Result<()> {
-    let target = parse_optional_int(values.get(0).copied())?;
+    let target = parse_optional_int(values.first().copied())?;
     let db = api::context_db_handle(context);
 
     sql::exec_with_bind_text(db, "begin immediate", &[])?;
@@ -60,12 +60,16 @@ pub fn absurd_apply_migrations(
             db,
             "select id from absurd_migrations order by id",
         )
-        .map_err(|err| Error::new_message(&format!("failed to prepare migrations lookup: {:?}", err)))?;
+        .map_err(|err| {
+            Error::new_message(format!("failed to prepare migrations lookup: {:?}", err))
+        })?;
         for row in stmt.execute() {
-            let row = row.map_err(|err| Error::new_message(&format!("failed to read migration row: {:?}", err)))?;
-            let id = row
-                .get::<i64>(0)
-                .map_err(|err| Error::new_message(&format!("failed to read migration id: {:?}", err)))?;
+            let row = row.map_err(|err| {
+                Error::new_message(format!("failed to read migration row: {:?}", err))
+            })?;
+            let id = row.get::<i64>(0).map_err(|err| {
+                Error::new_message(format!("failed to read migration id: {:?}", err))
+            })?;
             applied_ids.push(id);
         }
         let max_applied = applied_ids.iter().max().cloned().unwrap_or(0);
@@ -192,19 +196,23 @@ impl VTabCursor for MigrationRecordsCursor {
             self.db,
             "select id, introduced_version, applied_time from absurd_migrations order by id",
         )
-        .map_err(|err| Error::new_message(&format!("failed to prepare migration records: {:?}", err)))?;
+        .map_err(|err| {
+            Error::new_message(format!("failed to prepare migration records: {:?}", err))
+        })?;
         let mut rows = Vec::new();
         for row in stmt.execute() {
-            let row = row.map_err(|err| Error::new_message(&format!("failed to read migration record: {:?}", err)))?;
-            let id = row
-                .get::<i64>(0)
-                .map_err(|err| Error::new_message(&format!("failed to read migration id: {:?}", err)))?;
-            let introduced_version = row
-                .get::<String>(1)
-                .map_err(|err| Error::new_message(&format!("failed to read introduced_version: {:?}", err)))?;
-            let applied_time = row
-                .get::<i64>(2)
-                .map_err(|err| Error::new_message(&format!("failed to read applied_time: {:?}", err)))?;
+            let row = row.map_err(|err| {
+                Error::new_message(format!("failed to read migration record: {:?}", err))
+            })?;
+            let id = row.get::<i64>(0).map_err(|err| {
+                Error::new_message(format!("failed to read migration id: {:?}", err))
+            })?;
+            let introduced_version = row.get::<String>(1).map_err(|err| {
+                Error::new_message(format!("failed to read introduced_version: {:?}", err))
+            })?;
+            let applied_time = row.get::<i64>(2).map_err(|err| {
+                Error::new_message(format!("failed to read applied_time: {:?}", err))
+            })?;
             rows.push(MigrationRecord {
                 id,
                 introduced_version,

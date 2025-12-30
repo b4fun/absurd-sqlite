@@ -28,8 +28,7 @@ fn main() {
     let migrations_dir = manifest_dir.join("migrations");
     println!("cargo:rerun-if-changed={}", migrations_dir.display());
 
-    let default_version =
-        env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "0.0.0".to_string());
+    let default_version = env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "0.0.0".to_string());
     let mut migrations: Vec<MigrationFile> = Vec::new();
 
     let entries = fs::read_dir(&migrations_dir)
@@ -53,8 +52,7 @@ fn main() {
             continue;
         }
         let id: i64 = stem.parse().expect("migration id");
-        let contents =
-            fs::read_to_string(&path).expect("failed to read migration file");
+        let contents = fs::read_to_string(&path).expect("failed to read migration file");
         let introduced_version = parse_introduced_version(&contents, &default_version);
         migrations.push(MigrationFile {
             id,

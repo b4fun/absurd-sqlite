@@ -1,13 +1,13 @@
 use crate::sql;
 use crate::validate;
 use serde_json::Value as JsonValue;
+use sqlite3ext_sys::sqlite3;
 use sqlite_loadable::prelude::*;
 use sqlite_loadable::{
     api,
     table::{BestIndexError, ConstraintOperator, IndexInfo, VTab, VTabArguments, VTabCursor},
     Error, Result,
 };
-use sqlite3ext_sys::sqlite3;
 use std::os::raw::c_int;
 
 struct CheckpointRow {
@@ -17,8 +17,6 @@ struct CheckpointRow {
     owner_run_id: Option<String>,
     updated_at: i64,
 }
-
-
 
 fn parse_optional_int(value: &*mut sqlite3_value) -> Option<i64> {
     if api::value_is_null(value) {
@@ -35,15 +33,12 @@ pub fn absurd_set_task_checkpoint_state(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
 ) -> Result<()> {
-    let queue_name = api::value_text_notnull(values.get(0).expect("queue_name"))?;
+    let queue_name = api::value_text_notnull(values.first().expect("queue_name"))?;
     let task_id = api::value_text_notnull(values.get(1).expect("task_id"))?;
     let step_name = api::value_text_notnull(values.get(2).expect("step_name"))?;
     let state_value = values.get(3).expect("state");
     let owner_run = api::value_text_notnull(values.get(4).expect("owner_run"))?;
-    let extend_claim_by = values
-        .get(5)
-        .and_then(|value| parse_optional_int(value))
-        .unwrap_or(0);
+    let extend_claim_by = values.get(5).and_then(parse_optional_int).unwrap_or(0);
 
     validate::queue_name(queue_name)?;
     validate::step_name(step_name)?;
@@ -52,14 +47,14 @@ pub fn absurd_set_task_checkpoint_state(
         "".to_string()
     } else {
         let raw = api::value_text(state_value)
-            .map_err(|err| Error::new_message(&format!("state must be valid JSON: {:?}", err)))?
+            .map_err(|err| Error::new_message(format!("state must be valid JSON: {:?}", err)))?
             .trim()
             .to_string();
         if raw.is_empty() {
             return Err(Error::new_message("state must be valid JSON"));
         }
-        let _: JsonValue =
-            serde_json::from_str(&raw).map_err(|err| Error::new_message(&format!("state must be valid JSON: {:?}", err)))?;
+        let _: JsonValue = serde_json::from_str(&raw)
+            .map_err(|err| Error::new_message(format!("state must be valid JSON: {:?}", err)))?;
         raw
     };
 
@@ -79,29 +74,30 @@ pub fn absurd_set_task_checkpoint_state(
               where r.queue_name = ?1
                 and r.run_id = ?2",
         )
-        .map_err(|err| Error::new_message(&format!("failed to prepare run lookup: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to prepare run lookup: {:?}", err)))?;
         stmt.bind_text(1, queue_name)
-            .map_err(|err| Error::new_message(&format!("failed to bind queue_name: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
         stmt.bind_text(2, owner_run)
-            .map_err(|err| Error::new_message(&format!("failed to bind owner_run: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind owner_run: {:?}", err)))?;
         let mut rows = stmt.execute();
         let row = rows
             .next()
             .ok_or_else(|| Error::new_message("run not found for checkpoint"))?
-            .map_err(|err| Error::new_message(&format!("failed to read run row: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read run row: {:?}", err)))?;
         let new_attempt = row
             .get::<i64>(0)
-            .map_err(|err| Error::new_message(&format!("failed to read attempt: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read attempt: {:?}", err)))?;
         let task_state = row
             .get::<String>(1)
-            .map_err(|err| Error::new_message(&format!("failed to read task state: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read task state: {:?}", err)))?;
 
         if task_state == "cancelled" {
             return Err(Error::new_message("Task has been cancelled"));
         }
 
         if extend_claim_by > 0 {
-            let extend_value = (sql::now_ms_from_db(db) + extend_claim_by.saturating_mul(1000)).to_string();
+            let extend_value =
+                (sql::now_ms_from_db(db) + extend_claim_by.saturating_mul(1000)).to_string();
             sql::exec_with_bind_text(
                 db,
                 "update absurd_runs
@@ -126,26 +122,29 @@ pub fn absurd_set_task_checkpoint_state(
                 and c.task_id = ?2
                 and c.checkpoint_name = ?3",
         )
-        .map_err(|err| Error::new_message(&format!("failed to prepare checkpoint lookup: {:?}", err)))?;
+        .map_err(|err| {
+            Error::new_message(format!("failed to prepare checkpoint lookup: {:?}", err))
+        })?;
         existing_stmt
             .bind_text(1, queue_name)
-            .map_err(|err| Error::new_message(&format!("failed to bind queue_name: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
         existing_stmt
             .bind_text(2, task_id)
-            .map_err(|err| Error::new_message(&format!("failed to bind task_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind task_id: {:?}", err)))?;
         existing_stmt
             .bind_text(3, step_name)
-            .map_err(|err| Error::new_message(&format!("failed to bind step_name: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind step_name: {:?}", err)))?;
         let mut existing_rows = existing_stmt.execute();
         let mut allow_update = true;
         if let Some(Ok(existing_row)) = existing_rows.next() {
-            let existing_owner = existing_row
-                .get::<String>(0)
-                .map_err(|err| Error::new_message(&format!("failed to read owner_run_id: {:?}", err)))?;
+            let existing_owner = existing_row.get::<String>(0).map_err(|err| {
+                Error::new_message(format!("failed to read owner_run_id: {:?}", err))
+            })?;
             let existing_attempt = existing_row
                 .get::<i64>(1)
-                .map_err(|err| Error::new_message(&format!("failed to read attempt: {:?}", err)))?;
-            if !existing_owner.is_empty() && existing_attempt >= 0 && new_attempt < existing_attempt {
+                .map_err(|err| Error::new_message(format!("failed to read attempt: {:?}", err)))?;
+            if !existing_owner.is_empty() && existing_attempt >= 0 && new_attempt < existing_attempt
+            {
                 allow_update = false;
             }
         }
@@ -390,7 +389,7 @@ impl VTabCursor for CheckpointCursor {
         idx_str: Option<&str>,
         values: &[*mut sqlite3_value],
     ) -> Result<()> {
-        let queue_name = api::value_text_notnull(values.get(0).expect("queue_name"))?;
+        let queue_name = api::value_text_notnull(values.first().expect("queue_name"))?;
         let task_id = api::value_text_notnull(values.get(1).expect("task_id"))?;
         validate::queue_name(queue_name)?;
 
@@ -424,37 +423,49 @@ impl VTabCursor for CheckpointCursor {
             )
         };
 
-        let mut stmt = sqlite_loadable::exec::Statement::prepare(self.db, sql_query)
-            .map_err(|err| Error::new_message(&format!("failed to prepare checkpoint query: {:?}", err)))?;
+        let mut stmt =
+            sqlite_loadable::exec::Statement::prepare(self.db, sql_query).map_err(|err| {
+                Error::new_message(format!("failed to prepare checkpoint query: {:?}", err))
+            })?;
         for (idx, value) in params.iter().enumerate() {
-            stmt.bind_text((idx + 1) as i32, value)
-                .map_err(|err| Error::new_message(&format!("failed to bind parameter: {:?}", err)))?;
+            stmt.bind_text((idx + 1) as i32, value).map_err(|err| {
+                Error::new_message(format!("failed to bind parameter: {:?}", err))
+            })?;
         }
 
         let mut results = Vec::new();
         for row in stmt.execute() {
-            let row = row.map_err(|err| Error::new_message(&format!("failed to read row: {:?}", err)))?;
-            let checkpoint_name = row
-                .get::<String>(0)
-                .map_err(|err| Error::new_message(&format!("failed to read checkpoint_name: {:?}", err)))?;
+            let row =
+                row.map_err(|err| Error::new_message(format!("failed to read row: {:?}", err)))?;
+            let checkpoint_name = row.get::<String>(0).map_err(|err| {
+                Error::new_message(format!("failed to read checkpoint_name: {:?}", err))
+            })?;
             let state_raw = row
                 .get::<String>(1)
-                .map_err(|err| Error::new_message(&format!("failed to read state: {:?}", err)))?;
+                .map_err(|err| Error::new_message(format!("failed to read state: {:?}", err)))?;
             let status = row
                 .get::<String>(2)
-                .map_err(|err| Error::new_message(&format!("failed to read status: {:?}", err)))?;
-            let owner_raw = row
-                .get::<String>(3)
-                .map_err(|err| Error::new_message(&format!("failed to read owner_run_id: {:?}", err)))?;
-            let updated_at = row
-                .get::<i64>(4)
-                .map_err(|err| Error::new_message(&format!("failed to read updated_at: {:?}", err)))?;
+                .map_err(|err| Error::new_message(format!("failed to read status: {:?}", err)))?;
+            let owner_raw = row.get::<String>(3).map_err(|err| {
+                Error::new_message(format!("failed to read owner_run_id: {:?}", err))
+            })?;
+            let updated_at = row.get::<i64>(4).map_err(|err| {
+                Error::new_message(format!("failed to read updated_at: {:?}", err))
+            })?;
 
             results.push(CheckpointRow {
                 checkpoint_name,
-                state: if state_raw.is_empty() { None } else { Some(state_raw) },
+                state: if state_raw.is_empty() {
+                    None
+                } else {
+                    Some(state_raw)
+                },
                 status,
-                owner_run_id: if owner_raw.is_empty() { None } else { Some(owner_raw) },
+                owner_run_id: if owner_raw.is_empty() {
+                    None
+                } else {
+                    Some(owner_raw)
+                },
                 updated_at,
             });
         }
@@ -480,7 +491,9 @@ impl VTabCursor for CheckpointCursor {
         }
         let result = &self.results[self.rowid as usize];
         match checkpoint_output_column(i) {
-            Some(CheckpointColumns::CheckpointName) => api::result_text(context, &result.checkpoint_name)?,
+            Some(CheckpointColumns::CheckpointName) => {
+                api::result_text(context, &result.checkpoint_name)?
+            }
             Some(CheckpointColumns::State) => match &result.state {
                 Some(value) => sql::result_json_value(self.db, context, value)?,
                 None => api::result_null(context),
