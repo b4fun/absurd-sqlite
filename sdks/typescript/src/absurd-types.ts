@@ -8,6 +8,8 @@ import type {
   WorkerOptions,
 } from "absurd-sdk";
 
+import type { SQLiteRestBindParams } from "./sqlite-types";
+
 /**
  * Minimal query interface compatible with Absurd's database operations.
  */
@@ -17,9 +19,9 @@ export interface Queryable {
    * @param sql SQL text with parameter placeholders.
    * @param params Optional positional parameters.
    */
-  query<R extends object, I = any>(
+  query<R extends object = Record<string, any>>(
     sql: string,
-    params?: I[]
+    params?: SQLiteRestBindParams
   ): Promise<{ rows: R[] }>;
 }
 
