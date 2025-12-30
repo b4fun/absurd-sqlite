@@ -61,7 +61,7 @@ pub fn run() {
         .setup(move |app| {
             let app_handle = app.handle().clone();
 
-            let mut enable_dev_api = load_dev_api_enabled(&app_handle).unwrap_or(false);
+            let enable_dev_api = load_dev_api_enabled(&app_handle).unwrap_or(false);
             let mut db_handle = None;
 
             if let Ok(matches) = app.cli().matches() {

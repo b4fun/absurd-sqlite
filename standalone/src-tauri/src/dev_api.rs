@@ -104,7 +104,9 @@ pub fn load_dev_api_enabled(app_handle: &AppHandle) -> Option<bool> {
         return None;
     }
     let stored = store.get(DEV_API_ENABLED_KEY);
-    stored.as_ref().map(|value| parse_dev_api_enabled(Some(value)))
+    stored
+        .as_ref()
+        .map(|value| parse_dev_api_enabled(Some(value)))
 }
 
 fn persist_dev_api_enabled(app_handle: &AppHandle, enabled: bool) -> Result<(), String> {
@@ -113,14 +115,6 @@ fn persist_dev_api_enabled(app_handle: &AppHandle, enabled: bool) -> Result<(), 
         .map_err(|err| err.to_string())?;
     store.set(DEV_API_ENABLED_KEY, Value::Bool(enabled));
     store.save().map_err(|err| err.to_string())
-}
-
-pub fn parse_dev_api_port(value: Option<&serde_json::Value>) -> Option<u16> {
-    match value {
-        Some(Value::Number(num)) => num.as_u64().and_then(|port| u16::try_from(port).ok()),
-        Some(Value::String(text)) => text.parse::<u16>().ok(),
-        _ => None,
-    }
 }
 
 pub fn parse_dev_api_enabled(value: Option<&serde_json::Value>) -> bool {
@@ -135,25 +129,8 @@ pub fn parse_dev_api_enabled(value: Option<&serde_json::Value>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_dev_api_enabled, parse_dev_api_port};
+    use super::parse_dev_api_enabled;
     use serde_json::json;
-
-    #[test]
-    fn parses_dev_api_port_from_number() {
-        let value = json!(11223);
-        assert_eq!(parse_dev_api_port(Some(&value)), Some(11223));
-    }
-
-    #[test]
-    fn parses_dev_api_port_from_string() {
-        let value = json!("11224");
-        assert_eq!(parse_dev_api_port(Some(&value)), Some(11224));
-    }
-
-    #[test]
-    fn parses_dev_api_port_missing() {
-        assert_eq!(parse_dev_api_port(None), None);
-    }
 
     #[test]
     fn parses_dev_api_enabled_true() {
@@ -238,7 +215,10 @@ async fn start_server(app_handle: AppHandle, desired_port: u16) -> Result<Runnin
 
     let context = DevApiContext { app_handle };
     let router = Router::new()
-        .route("/absurd-data/:procedure", post(trpc_post_handler).get(trpc_get_handler))
+        .route(
+            "/absurd-data/:procedure",
+            post(trpc_post_handler).get(trpc_get_handler),
+        )
         .with_state(context)
         .layer(CorsLayer::permissive());
 
@@ -258,9 +238,7 @@ async fn start_server(app_handle: AppHandle, desired_port: u16) -> Result<Runnin
     })
 }
 
-async fn bind_with_fallback(
-    start_port: u16,
-) -> Result<(tokio::net::TcpListener, u16), String> {
+async fn bind_with_fallback(start_port: u16) -> Result<(tokio::net::TcpListener, u16), String> {
     for offset in 0..DEV_API_PORT_ATTEMPTS {
         let port = start_port.saturating_add(offset);
         match tokio::net::TcpListener::bind(("127.0.0.1", port)).await {
@@ -278,10 +256,7 @@ async fn trpc_post_handler(
     Json(payload): Json<TrpcRequest>,
 ) -> Json<Value> {
     let id = payload.id.unwrap_or(Value::Null);
-    let input = payload
-        .json
-        .or(payload.input)
-        .unwrap_or(Value::Null);
+    let input = payload.json.or(payload.input).unwrap_or(Value::Null);
     execute_trpc(&context, &procedure, id, input).await
 }
 
@@ -417,7 +392,9 @@ fn handle_procedure(
         }
         "getSettingsInfo" => {
             let db_handle = app_handle.state::<DatabaseHandle>();
-            let db_path = db_handle.db_path(app_handle).map_err(|err| err.to_string())?;
+            let db_path = db_handle
+                .db_path(app_handle)
+                .map_err(|err| err.to_string())?;
             with_provider(app_handle, |provider| {
                 let info = provider.get_settings_info(db_path)?;
                 Ok(serde_json::to_value(info)?)
