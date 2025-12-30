@@ -60,7 +60,7 @@
     </div>
   </header>
 
-  <main class="mx-auto w-full max-w-screen-2xl px-8 py-8">
+  <main class="mx-auto w-full max-w-screen-2xl px-8 py-8 pb-20">
     {@render children?.()}
   </main>
 </div>
