@@ -7,7 +7,7 @@ This folder contains the core SQLite extension logic for Absurd-SQLite, implemen
 This is a Rust based project. To build the extension, ensure you have Rust and Cargo installed, then run:
 
 ```bash
-$ cargo build --release
+$ cargo build
 ```
 
 ### Code Linting and Formatting
