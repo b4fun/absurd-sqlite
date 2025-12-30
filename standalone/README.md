@@ -1,7 +1,3 @@
-# Tauri + SvelteKit + TypeScript
+# Standalone
 
-This template should help get you started developing with Tauri, SvelteKit and TypeScript in Vite.
-
-## Recommended IDE Setup
-
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
+Standalone folder hosts the Tauri v2 based desktop application, pairing a Rust backend (`src-tauri`) with a SvelteKit + Typescript frontend (`src`) to provide a local UI around the Absurd-SQLite engine.
