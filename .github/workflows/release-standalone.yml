@@ -44,6 +44,9 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use ad-hoc signing on macOS by setting identity to '-' per Tauri v2 docs:
+          # https://v2.tauri.app/distribute/sign/macos/#ad-hoc-signing
+          APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && '-' || '' }}
         with:
           projectPath: standalone
           tagName: ${{ github.ref_name }}
