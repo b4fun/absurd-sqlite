@@ -91,24 +91,13 @@ impl DatabaseHandle {
 }
 
 fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
-    let triple = std::env::var("TAURI_TARGET_TRIPLE").unwrap_or_else(|_| "unknown".to_string());
-    let bin_name = format!(
-        "absurd-extension-{}{}",
-        triple,
-        if cfg!(target_os = "windows") {
-            ".exe"
-        } else {
-            ""
-        }
-    );
-
-    if let Ok(path) = app_handle
+    let mut candidates: Vec<(&str, PathBuf)> = Vec::new();
+    match app_handle
         .path()
-        .resolve(Path::new("bin").join(&bin_name), BaseDirectory::Resource)
+        .resolve(Path::new("bin").join("absurd-extension"), BaseDirectory::Resource)
     {
-        if path.exists() {
-            return Some(path);
-        }
+        Ok(path) => candidates.push(("bundled", path)),
+        Err(err) => log::debug!("Failed to resolve bundled extension path: {}", err),
     }
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -118,15 +107,21 @@ fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
         .unwrap_or(&manifest_dir);
     let target_dir = workspace_root.join("target");
     let lib_name = extension_lib_name();
-    let debug_path = target_dir.join("debug").join(&lib_name);
-    if debug_path.exists() {
-        return Some(debug_path);
-    }
-    let release_path = target_dir.join("release").join(&lib_name);
-    if release_path.exists() {
-        return Some(release_path);
+    candidates.push(("debug build", target_dir.join("debug").join(&lib_name)));
+    candidates.push(("release build", target_dir.join("release").join(&lib_name)));
+
+    for (label, path) in candidates {
+        log::debug!("Checking {} SQLite extension at {}", label, path.display());
+        if path.exists() {
+            log::info!("Using {} SQLite extension at {}", label, path.display());
+            return Some(path);
+        }
     }
 
+    log::warn!(
+        "SQLite extension not found. Checked bundled resource and build outputs in {}",
+        target_dir.display()
+    );
     None
 }
 
