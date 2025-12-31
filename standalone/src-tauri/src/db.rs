@@ -110,7 +110,7 @@ fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
     let lib_name = extension_lib_name();
     match app_handle.path().resource_dir() {
         Ok(resource_dir) => {
-            let resource_path = resource_dir.join(&lib_name);
+            let resource_path = resource_dir.join("resources").join(&lib_name);
             log::debug!(
                 "Checking resource SQLite extension at {}",
                 resource_path.display()
