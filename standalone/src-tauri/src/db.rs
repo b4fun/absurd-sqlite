@@ -68,21 +68,37 @@ impl DatabaseHandle {
         let extension_path = resolve_extension_path(app_handle);
         if extension_path.is_none() {
             // fail early if no extension found
+            log::error!("SQLite extension path could not be resolved");
             return Err(anyhow::anyhow!("SQLite extension not found"));
         }
 
         log::debug!("Loading SQLite extension from {:?}", extension_path);
         // Safety: extension from own build
         unsafe {
-            conn.load_extension_enable()
-                .context("enable extension loading")?;
-            conn.load_extension(
-                extension_path.unwrap().to_string_lossy().as_ref(),
-                Some("sqlite3_absurd_init"),
-            )
-            .context("load SQLite extension")?;
-            conn.load_extension_disable()
-                .context("disable extension loading")?;
+            if let Err(err) = conn
+                .load_extension_enable()
+                .context("enable extension loading")
+            {
+                log::error!("Failed to enable SQLite extension loading: {:#}", err);
+                return Err(err);
+            }
+            if let Err(err) = conn
+                .load_extension(
+                    extension_path.unwrap().to_string_lossy().as_ref(),
+                    Some("sqlite3_absurd_init"),
+                )
+                .context("load SQLite extension")
+            {
+                log::error!("Failed to load SQLite extension: {:#}", err);
+                return Err(err);
+            }
+            if let Err(err) = conn
+                .load_extension_disable()
+                .context("disable extension loading")
+            {
+                log::error!("Failed to disable SQLite extension loading: {:#}", err);
+                return Err(err);
+            }
         }
         log::debug!("SQLite extension loaded successfully");
 
