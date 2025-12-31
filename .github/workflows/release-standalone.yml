@@ -40,6 +40,10 @@ jobs:
       - name: Extract release version
         run: echo "RELEASE_VERSION=${GITHUB_REF_NAME#standalone/}" >> "$GITHUB_ENV"
 
+      - name: Build extension
+        run: cargo build --release
+        working-directory: absurd-sqlite-extension
+
       - name: Build and release
         uses: tauri-apps/tauri-action@v0
         env:
