@@ -51,6 +51,8 @@ pub fn run() {
             dev_api::set_dev_api_enabled
         ])
         .on_menu_event(|app, event| {
+            // DevTools is only available in debug builds
+            #[cfg(any(debug_assertions))]
             if event.id() == DEVTOOLS_MENU_ID {
                 if let Some(window) = app.get_webview_window("main") {
                     window.open_devtools();
