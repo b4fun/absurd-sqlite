@@ -65,6 +65,8 @@ impl DatabaseHandle {
         let db_path = self.db_path(app_handle)?;
         let conn = Connection::open(db_path)?;
 
+        log::info!("using SQLite version: {}", rusqlite::version());
+
         let extension_path = resolve_extension_path(app_handle);
         if extension_path.is_none() {
             // fail early if no extension found
