@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use rusqlite::Connection;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use tauri::{path::BaseDirectory, AppHandle, Manager};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_cli::ArgData;
 
 enum Source {
@@ -90,14 +90,18 @@ impl DatabaseHandle {
     }
 }
 
-fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
+fn resolve_extension_path(_app_handle: &AppHandle) -> Option<PathBuf> {
     let mut candidates: Vec<(&str, PathBuf)> = Vec::new();
-    match app_handle.path().resolve(
-        Path::new("bin").join("absurd-extension"),
-        BaseDirectory::Resource,
-    ) {
-        Ok(path) => candidates.push(("bundled", path)),
-        Err(err) => log::debug!("Failed to resolve bundled extension path: {}", err),
+    match std::env::current_exe() {
+        Ok(current_exe) => {
+            if let Some(exe_dir) = current_exe.parent() {
+                candidates.push(("sidecar", exe_dir.join("absurd-extension")));
+                candidates.push(("sidecar bin", exe_dir.join("bin").join("absurd-extension")));
+            } else {
+                log::warn!("Failed to resolve current executable directory");
+            }
+        }
+        Err(err) => log::warn!("Failed to resolve current executable path: {}", err),
     }
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
