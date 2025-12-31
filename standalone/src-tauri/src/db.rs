@@ -92,10 +92,10 @@ impl DatabaseHandle {
 
 fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
     let mut candidates: Vec<(&str, PathBuf)> = Vec::new();
-    match app_handle
-        .path()
-        .resolve(Path::new("bin").join("absurd-extension"), BaseDirectory::Resource)
-    {
+    match app_handle.path().resolve(
+        Path::new("bin").join("absurd-extension"),
+        BaseDirectory::Resource,
+    ) {
         Ok(path) => candidates.push(("bundled", path)),
         Err(err) => log::debug!("Failed to resolve bundled extension path: {}", err),
     }
