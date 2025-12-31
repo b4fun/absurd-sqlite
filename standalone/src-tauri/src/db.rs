@@ -82,9 +82,11 @@ impl DatabaseHandle {
                 log::error!("Failed to enable SQLite extension loading: {:#}", err);
                 return Err(err);
             }
+            // remove the extension part from the path
+            let extension_path_no_ext = extension_path.unwrap().with_extension("");
             if let Err(err) = conn
                 .load_extension(
-                    extension_path.unwrap().to_string_lossy().as_ref(),
+                    extension_path_no_ext.to_string_lossy().as_ref(),
                     Some("sqlite3_absurd_init"),
                 )
                 .context("load SQLite extension")
