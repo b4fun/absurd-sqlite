@@ -106,18 +106,28 @@ impl DatabaseHandle {
     }
 }
 
-fn resolve_extension_path(_app_handle: &AppHandle) -> Option<PathBuf> {
-    let mut candidates: Vec<(&str, PathBuf)> = Vec::new();
-    match std::env::current_exe() {
-        Ok(current_exe) => {
-            if let Some(exe_dir) = current_exe.parent() {
-                candidates.push(("sidecar", exe_dir.join("absurd-extension")));
-                candidates.push(("sidecar bin", exe_dir.join("bin").join("absurd-extension")));
-            } else {
-                log::warn!("Failed to resolve current executable directory");
+fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
+    let lib_name = extension_lib_name();
+    match app_handle.path().resource_dir() {
+        Ok(resource_dir) => {
+            let resource_path = resource_dir.join(&lib_name);
+            log::debug!(
+                "Checking resource SQLite extension at {}",
+                resource_path.display()
+            );
+            if resource_path.exists() {
+                log::info!(
+                    "Using resource SQLite extension at {}",
+                    resource_path.display()
+                );
+                return Some(resource_path);
             }
+            log::warn!(
+                "SQLite extension not found in resources at {}",
+                resource_path.display()
+            );
         }
-        Err(err) => log::warn!("Failed to resolve current executable path: {}", err),
+        Err(err) => log::warn!("Failed to resolve resource directory: {}", err),
     }
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -126,9 +136,10 @@ fn resolve_extension_path(_app_handle: &AppHandle) -> Option<PathBuf> {
         .and_then(Path::parent)
         .unwrap_or(&manifest_dir);
     let target_dir = workspace_root.join("target");
-    let lib_name = extension_lib_name();
-    candidates.push(("debug build", target_dir.join("debug").join(&lib_name)));
-    candidates.push(("release build", target_dir.join("release").join(&lib_name)));
+    let candidates = [
+        ("debug build", target_dir.join("debug").join(&lib_name)),
+        ("release build", target_dir.join("release").join(&lib_name)),
+    ];
 
     for (label, path) in candidates {
         log::debug!("Checking {} SQLite extension at {}", label, path.display());
@@ -139,7 +150,7 @@ fn resolve_extension_path(_app_handle: &AppHandle) -> Option<PathBuf> {
     }
 
     log::warn!(
-        "SQLite extension not found. Checked bundled resource and build outputs in {}",
+        "SQLite extension not found. Checked bundled resources and build outputs in {}",
         target_dir.display()
     );
     None

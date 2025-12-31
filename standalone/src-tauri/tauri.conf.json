@@ -25,8 +25,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": [
-      "bin/absurd-extension"
+    "resources": [
+      "resources/*"
     ],
     "icon": [
       "icons/logo-32x32.png",
