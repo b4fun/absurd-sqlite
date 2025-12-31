@@ -1,0 +1,9 @@
+{
+  "imports": {
+    "absurd-sdk": "npm:absurd-sdk@0.0.7",
+    "@db/sqlite": "jsr:@db/sqlite@0.13.0"
+  },
+  "tasks": {
+    "start": "deno run -A main.ts"
+  }
+}
