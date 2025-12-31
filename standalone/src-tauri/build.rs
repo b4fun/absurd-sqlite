@@ -48,10 +48,11 @@ fn prepare_sqlite_extension() {
 
     let bin_dir = manifest_dir.join("bin");
     fs::create_dir_all(&bin_dir).expect("create bin directory");
-    let dest = bin_dir.join("absurd-extension");
+    let dest = bin_dir.join(format!("absurd-extension-{}", target_triple));
     fs::copy(&extension_path, &dest).expect("copy SQLite extension into resources");
     println!(
-        "cargo:info=Copying absurd_sqlite_extension from {}",
-        extension_path.display()
+        "cargo:info=Copying absurd_sqlite_extension from {} to {}",
+        extension_path.display(),
+        dest.display()
     );
 }
