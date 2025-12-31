@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { Absurd } from "../src/index";
+import { Absurd, SQLiteDatabase } from "../src/index";
 
 const testDir = fileURLToPath(new URL(".", import.meta.url));
 const repoRoot = join(testDir, "../../..");
@@ -53,7 +53,8 @@ afterEach(() => {
 describe("Absurd", () => {
   it("creates and lists queues using the sqlite extension", async () => {
     const dbPath = createDatabaseWithMigrations();
-    const absurd = new Absurd(extensionPath, dbPath);
+    const db = new sqlite(dbPath) as unknown as SQLiteDatabase;
+    const absurd = new Absurd(db, extensionPath);
 
     await absurd.createQueue("alpha");
     await absurd.createQueue("beta");
@@ -66,8 +67,8 @@ describe("Absurd", () => {
     const remaining = await absurd.listQueues();
     expect(remaining).not.toContain("alpha");
 
-    const db = new sqlite(dbPath);
-    const { count } = db
+    const db2 = new sqlite(dbPath);
+    const { count } = db2
       .prepare("select count(*) as count from absurd_queues")
       .get() as { count: number };
     expect(count).toBe(1);
@@ -78,12 +79,13 @@ describe("Absurd", () => {
 
   it("closes the sqlite database on close()", async () => {
     const dbPath = createDatabaseWithMigrations();
-    const absurd = new Absurd(extensionPath, dbPath);
+    const db = new sqlite(dbPath) as unknown as SQLiteDatabase;
+    const absurd = new Absurd(db, extensionPath);
 
     await absurd.close();
 
-    const db = new sqlite(dbPath);
-    const { ok } = db.prepare("select 1 as ok").get() as { ok: number };
+    const db2 = new sqlite(dbPath);
+    const { ok } = db2.prepare("select 1 as ok").get() as { ok: number };
     expect(ok).toBe(1);
     db.close();
   });

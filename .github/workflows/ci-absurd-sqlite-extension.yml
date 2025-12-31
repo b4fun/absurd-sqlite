@@ -1,0 +1,31 @@
+name: Absurd SQLite Extension CI
+
+on:
+  pull_request:
+    paths:
+      - absurd-sqlite-extension/**
+      - Cargo.toml
+      - Cargo.lock
+      - .github/workflows/ci-absurd-sqlite-extension.yml
+
+jobs:
+  lint-format-test:
+    name: Lint, Format, Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format check
+        run: cargo fmt -p absurd_sqlite_extension -- --check
+
+      - name: Lint
+        run: cargo clippy -p absurd_sqlite_extension -- -D warnings
+
+      - name: Unit tests
+        run: cargo test -p absurd_sqlite_extension

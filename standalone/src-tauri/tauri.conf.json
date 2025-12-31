@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Absurd SQLite",
+  "version": "0.1.0",
+  "identifier": "ing.isbuild.absurd-sqlite-standalone",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build:tauri",
+    "frontendDist": "../build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Absurd SQLite",
+        "width": 1075,
+        "height": 800
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": [
+      "bin/absurd-extension"
+    ],
+    "icon": [
+      "icons/logo-32x32.png",
+      "icons/logo-128x128.png",
+      "icons/logo-512x512.png",
+      "icons/logo-1024x1024.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "cli": {
+      "description": "Absurd SQLite",
+      "args": [
+        {
+          "name": "db",
+          "description": "Path to the SQLite database file"
+        }
+      ]
+    }
+  }
+}

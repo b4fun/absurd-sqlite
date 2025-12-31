@@ -5,9 +5,7 @@ use uuid::Uuid;
 
 fn extension_path() -> PathBuf {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root = manifest_dir
-        .parent()
-        .expect("workspace root not found");
+    let workspace_root = manifest_dir.parent().expect("workspace root not found");
     let lib_name = format!("libabsurd{}", std::env::consts::DLL_SUFFIX);
     workspace_root.join("target").join("debug").join(lib_name)
 }
@@ -19,7 +17,10 @@ fn build_extension(_path: &Path) {
         .args([
             "build",
             "--manifest-path",
-            manifest_dir.join("Cargo.toml").to_str().expect("manifest path"),
+            manifest_dir
+                .join("Cargo.toml")
+                .to_str()
+                .expect("manifest path"),
         ])
         .status()
         .expect("run cargo build");
@@ -46,7 +47,8 @@ fn test_extension_with_real_db() {
         conn.load_extension_enable().expect("enable load_extension");
         conn.load_extension(&ext_path, None::<&str>)
             .expect("load extension");
-        conn.load_extension_disable().expect("disable load_extension");
+        conn.load_extension_disable()
+            .expect("disable load_extension");
     }
 
     apply_migrations(&conn);
@@ -113,7 +115,8 @@ fn test_claim_timeout_creates_retry_run() {
         conn.load_extension_enable().expect("enable load_extension");
         conn.load_extension(&ext_path, None::<&str>)
             .expect("load extension");
-        conn.load_extension_disable().expect("disable load_extension");
+        conn.load_extension_disable()
+            .expect("disable load_extension");
     }
 
     apply_migrations(&conn);
@@ -194,7 +197,8 @@ fn test_schedule_and_fail_run_integration() {
         conn.load_extension_enable().expect("enable load_extension");
         conn.load_extension(&ext_path, None::<&str>)
             .expect("load extension");
-        conn.load_extension_disable().expect("disable load_extension");
+        conn.load_extension_disable()
+            .expect("disable load_extension");
     }
 
     apply_migrations(&conn);
@@ -291,7 +295,8 @@ fn test_complete_and_extend_claim_integration() {
         conn.load_extension_enable().expect("enable load_extension");
         conn.load_extension(&ext_path, None::<&str>)
             .expect("load extension");
-        conn.load_extension_disable().expect("disable load_extension");
+        conn.load_extension_disable()
+            .expect("disable load_extension");
     }
 
     apply_migrations(&conn);
@@ -385,7 +390,8 @@ fn test_checkpoint_and_event_integration() {
         conn.load_extension_enable().expect("enable load_extension");
         conn.load_extension(&ext_path, None::<&str>)
             .expect("load extension");
-        conn.load_extension_disable().expect("disable load_extension");
+        conn.load_extension_disable()
+            .expect("disable load_extension");
     }
 
     apply_migrations(&conn);
@@ -481,7 +487,8 @@ fn test_cleanup_integration() {
         conn.load_extension_enable().expect("enable load_extension");
         conn.load_extension(&ext_path, None::<&str>)
             .expect("load extension");
-        conn.load_extension_disable().expect("disable load_extension");
+        conn.load_extension_disable()
+            .expect("disable load_extension");
     }
 
     apply_migrations(&conn);
@@ -522,11 +529,9 @@ fn test_cleanup_integration() {
     .expect("set completed_at");
 
     let _: Option<i64> = conn
-        .query_row(
-            "select absurd_emit_event('alpha', 'eventA')",
-            [],
-            |r| r.get(0),
-        )
+        .query_row("select absurd_emit_event('alpha', 'eventA')", [], |r| {
+            r.get(0)
+        })
         .expect("emit event");
     conn.execute(
         "update absurd_events set emitted_at = 1 where queue_name = 'alpha' and event_name = 'eventA'",
@@ -535,20 +540,16 @@ fn test_cleanup_integration() {
     .expect("set emitted_at");
 
     let deleted_tasks: i64 = conn
-        .query_row(
-            "select absurd_cleanup_tasks('alpha', 1, 100)",
-            [],
-            |r| r.get(0),
-        )
+        .query_row("select absurd_cleanup_tasks('alpha', 1, 100)", [], |r| {
+            r.get(0)
+        })
         .expect("cleanup absurd_tasks");
     assert_eq!(deleted_tasks, 1);
 
     let deleted_events: i64 = conn
-        .query_row(
-            "select absurd_cleanup_events('alpha', 1, 100)",
-            [],
-            |r| r.get(0),
-        )
+        .query_row("select absurd_cleanup_events('alpha', 1, 100)", [], |r| {
+            r.get(0)
+        })
         .expect("cleanup absurd_events");
     assert_eq!(deleted_events, 1);
 
@@ -567,7 +568,8 @@ fn test_cancel_task_integration() {
         conn.load_extension_enable().expect("enable load_extension");
         conn.load_extension(&ext_path, None::<&str>)
             .expect("load extension");
-        conn.load_extension_disable().expect("disable load_extension");
+        conn.load_extension_disable()
+            .expect("disable load_extension");
     }
 
     apply_migrations(&conn);
@@ -585,11 +587,9 @@ fn test_cancel_task_integration() {
         .expect("spawn task");
 
     let _: Option<i64> = conn
-        .query_row(
-            "select absurd_cancel_task('alpha', ?1)",
-            [&row.0],
-            |r| r.get(0),
-        )
+        .query_row("select absurd_cancel_task('alpha', ?1)", [&row.0], |r| {
+            r.get(0)
+        })
         .expect("cancel task");
 
     let task_state: String = conn

@@ -1,44 +1,41 @@
-import sqlite from "better-sqlite3";
-
-import { Queryable } from "./absurd";
-
-type EnforceIdenticalKeys<T, U> = keyof T extends keyof U
-  ? keyof U extends keyof T
-    ? T
-    : never
-  : never;
+import type { Queryable } from "./absurd-types";
+import type {
+  SQLiteRestBindParams,
+  SQLiteDatabase,
+  SQLiteStatement,
+  SQLiteVerboseLog,
+} from "./sqlite-types";
 
 export class SqliteConnection implements Queryable {
-  private readonly db: sqlite.Database;
+  private readonly db: SQLiteDatabase;
 
-  constructor(db: sqlite.Database) {
+  constructor(db: SQLiteDatabase) {
     this.db = db;
+    // TODO: verbose logging
   }
 
-  async query<R extends object, I = any>(
+  async query<R extends object = Record<string, any>>(
     sql: string,
-    params?: I[]
+    params?: SQLiteRestBindParams
   ): Promise<{ rows: R[] }> {
     const sqliteQuery = rewritePostgresQuery(sql);
     const sqliteParams = rewritePostgresParams(params);
 
     const statement = this.db.prepare(sqliteQuery);
-    if (!statement.reader) {
+    if (!statement.readonly) {
       // this indicates `return_data` is false
       // https://github.com/WiseLibs/better-sqlite3/blob/6209be238d6a1b181f516e4e636986604b0f62e1/src/objects/statement.cpp#L134C83-L134C95
       throw new Error("The query() method is only statements that return data");
     }
 
-    const rows = statement.all(sqliteParams) as EnforceIdenticalKeys<
-      sqlite.RunResult,
-      R
-    >[];
-    const rowsDecoded = rows.map((row) => decodeRowValues(statement, row));
+    const rowsDecoded = statement
+      .all(sqliteParams)
+      .map((row) => decodeRowValues(statement, row));
 
     return { rows: rowsDecoded };
   }
 
-  async exec<I = any>(sql: string, params?: I[]): Promise<void> {
+  async exec(sql: string, params?: SQLiteRestBindParams): Promise<void> {
     const sqliteQuery = rewritePostgresQuery(sql);
     const sqliteParams = rewritePostgresParams(params);
 
@@ -54,7 +51,9 @@ function rewritePostgresQuery(text: string): string {
     .replace(/absurd\.(\w+)/g, "absurd_$1");
 }
 
-function rewritePostgresParams<I = any>(params?: I[]): Record<string, I> {
+function rewritePostgresParams<I = any>(
+  params?: SQLiteRestBindParams
+): Record<string, I> {
   if (!params) {
     return {};
   }
@@ -70,9 +69,9 @@ function rewritePostgresParams<I = any>(params?: I[]): Record<string, I> {
 }
 
 function decodeRowValues<U extends object, R extends object = any>(
-  statement: sqlite.Statement,
-  row: EnforceIdenticalKeys<U, R>,
-  verbose?: sqlite.Options["verbose"]
+  statement: SQLiteStatement,
+  row: U,
+  verbose?: SQLiteVerboseLog
 ): R {
   const columns = statement.columns();
 
@@ -97,7 +96,7 @@ function decodeColumnValue<V = any>(
   value: unknown | V,
   columnName: string,
   columnType: string | null,
-  verbose?: sqlite.Options["verbose"]
+  verbose?: SQLiteVerboseLog
 ): V | null {
   if (value === null || value === undefined) {
     return null;

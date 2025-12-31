@@ -11,7 +11,7 @@ import {
 } from "absurd-sdk";
 
 import { SqliteConnection } from "../src/sqlite";
-import type { Absurd } from "../src/index";
+import type { Absurd, SQLiteDatabase } from "../src/index";
 
 // Database row types matching the SQLite schema
 export interface TaskRow {
@@ -123,10 +123,7 @@ export interface TestContext {
   ): Promise<void>;
   extendClaim(runID: string, extendBySeconds: number): Promise<void>;
   expectCancelledError(promise: Promise<unknown>): Promise<void>;
-  createClient(options?: {
-    queueName?: string;
-    hooks?: AbsurdHooks;
-  }): Absurd;
+  createClient(options?: { queueName?: string; hooks?: AbsurdHooks }): Absurd;
 }
 
 export function randomName(prefix = "test"): string {
@@ -163,7 +160,7 @@ function createFixture(): SqliteFixture {
   const db = new sqlite(dbPath);
   db.loadExtension(extensionPath);
   db.prepare("select absurd_apply_migrations()").get();
-  const conn = new SqliteConnection(db);
+  const conn = new SqliteConnection(db as unknown as SQLiteDatabase);
 
   const cleanup = () => {
     rmSync(tempDir, { recursive: true, force: true });
@@ -199,7 +196,8 @@ export async function createTestAbsurd(
     getRuns: (taskID: string) => getRuns(fixture.conn, taskID, queueName),
     setFakeNow: (ts: Date | null) => setFakeNow(fixture.conn, ts),
     sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
-    getRemainingTasksCount: () => getRemainingTasksCount(fixture.conn, queueName),
+    getRemainingTasksCount: () =>
+      getRemainingTasksCount(fixture.conn, queueName),
     getRemainingEventsCount: () =>
       getRemainingEventsCount(fixture.conn, queueName),
     getWaitsCount: () => getWaitsCount(fixture.conn, queueName),
@@ -551,9 +549,7 @@ async function extendClaim(
   ]);
 }
 
-async function expectCancelledError(
-  promise: Promise<unknown>
-): Promise<void> {
+async function expectCancelledError(promise: Promise<unknown>): Promise<void> {
   try {
     await promise;
   } catch (err: any) {

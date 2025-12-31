@@ -1,16 +1,18 @@
+use sqlite3ext_sys::{sqlite3, sqlite3_context};
 use sqlite_loadable::ext::{
     sqlite3ext_bind_text, sqlite3ext_finalize, sqlite3ext_prepare_v2, sqlite3ext_step,
 };
 use sqlite_loadable::{Error, Result, SQLITE_DONE, SQLITE_OKAY, SQLITE_ROW};
-use sqlite3ext_sys::{sqlite3, sqlite3_context};
 use std::ffi::CString;
 use std::os::raw::{c_char, c_void};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn exec_with_bind_text(db: *mut sqlite3, sql: &str, params: &[&str]) -> Result<()> {
     let mut stmt = std::ptr::null_mut();
-    let sql_c = CString::new(sql).map_err(|err| Error::new_message(&format!("invalid sql: {:?}", err)))?;
-    let rc = unsafe { sqlite3ext_prepare_v2(db, sql_c.as_ptr(), -1, &mut stmt, std::ptr::null_mut()) };
+    let sql_c =
+        CString::new(sql).map_err(|err| Error::new_message(format!("invalid sql: {:?}", err)))?;
+    let rc =
+        unsafe { sqlite3ext_prepare_v2(db, sql_c.as_ptr(), -1, &mut stmt, std::ptr::null_mut()) };
     if rc != SQLITE_OKAY {
         return Err(Error::new_message("failed to prepare statement"));
     }
@@ -22,7 +24,7 @@ pub fn exec_with_bind_text(db: *mut sqlite3, sql: &str, params: &[&str]) -> Resu
     let step_rc = unsafe { sqlite3ext_step(stmt) };
     unsafe { sqlite3ext_finalize(stmt) };
     if step_rc != SQLITE_DONE && step_rc != SQLITE_ROW {
-        return Err(Error::new_message(&format!(
+        return Err(Error::new_message(format!(
             "statement execution failed (code {})",
             step_rc
         )));
@@ -31,7 +33,8 @@ pub fn exec_with_bind_text(db: *mut sqlite3, sql: &str, params: &[&str]) -> Resu
 }
 
 pub fn exec_batch(db: *mut sqlite3, sql: &str) -> Result<()> {
-    let sql_c = CString::new(sql).map_err(|err| Error::new_message(&format!("invalid sql: {:?}", err)))?;
+    let sql_c =
+        CString::new(sql).map_err(|err| Error::new_message(format!("invalid sql: {:?}", err)))?;
     let mut tail = std::ptr::null();
     let mut current = sql_c.as_ptr();
 
@@ -47,7 +50,7 @@ pub fn exec_batch(db: *mut sqlite3, sql: &str) -> Result<()> {
         let step_rc = unsafe { sqlite3ext_step(stmt) };
         unsafe { sqlite3ext_finalize(stmt) };
         if step_rc != SQLITE_DONE && step_rc != SQLITE_ROW {
-            return Err(Error::new_message(&format!(
+            return Err(Error::new_message(format!(
                 "statement execution failed (code {})",
                 step_rc
             )));
@@ -63,15 +66,15 @@ pub fn exec_batch(db: *mut sqlite3, sql: &str) -> Result<()> {
 
 pub fn query_row_i64(db: *mut sqlite3, sql: &str, params: &[&str]) -> Result<i64> {
     let mut stmt = sqlite_loadable::exec::Statement::prepare(db, sql)
-        .map_err(|err| Error::new_message(&format!("failed to prepare statement: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to prepare statement: {:?}", err)))?;
     for (idx, value) in params.iter().enumerate() {
         stmt.bind_text((idx + 1) as i32, value)
-            .map_err(|err| Error::new_message(&format!("failed to bind text: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind text: {:?}", err)))?;
     }
     let mut rows = stmt.execute();
     if let Some(Ok(row)) = rows.next() {
         row.get::<i64>(0)
-            .map_err(|err| Error::new_message(&format!("failed to read row: {:?}", err)))
+            .map_err(|err| Error::new_message(format!("failed to read row: {:?}", err)))
     } else {
         Err(Error::new_message("no rows returned"))
     }
@@ -83,22 +86,22 @@ pub fn query_row_strings(
     params: &[&str],
 ) -> Result<(String, String, i64)> {
     let mut stmt = sqlite_loadable::exec::Statement::prepare(db, sql)
-        .map_err(|err| Error::new_message(&format!("failed to prepare statement: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to prepare statement: {:?}", err)))?;
     for (idx, value) in params.iter().enumerate() {
         stmt.bind_text((idx + 1) as i32, value)
-            .map_err(|err| Error::new_message(&format!("failed to bind text: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to bind text: {:?}", err)))?;
     }
     let mut rows = stmt.execute();
     if let Some(Ok(row)) = rows.next() {
         let task_id = row
             .get::<String>(0)
-            .map_err(|err| Error::new_message(&format!("failed to read task_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read task_id: {:?}", err)))?;
         let run_id = row
             .get::<String>(1)
-            .map_err(|err| Error::new_message(&format!("failed to read run_id: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read run_id: {:?}", err)))?;
         let attempt = row
             .get::<i64>(2)
-            .map_err(|err| Error::new_message(&format!("failed to read attempt: {:?}", err)))?;
+            .map_err(|err| Error::new_message(format!("failed to read attempt: {:?}", err)))?;
         Ok((task_id, run_id, attempt))
     } else {
         Err(Error::new_message("no rows returned"))
@@ -107,7 +110,8 @@ pub fn query_row_strings(
 
 fn bind_text(stmt: *mut sqlite3ext_sys::sqlite3_stmt, idx: i32, value: &str) -> Result<()> {
     let bytes = value.as_bytes();
-    let cstr = CString::new(bytes).map_err(|err| Error::new_message(&format!("invalid bind text: {:?}", err)))?;
+    let cstr = CString::new(bytes)
+        .map_err(|err| Error::new_message(format!("invalid bind text: {:?}", err)))?;
     unsafe {
         sqlite3ext_bind_text(
             stmt,

@@ -81,16 +81,18 @@ impl VTabCursor for ListQueuesCursor {
             self.db,
             "select queue_name, created_at from absurd_queues order by queue_name",
         )
-        .map_err(|err| Error::new_message(&format!("failed to prepare queue list: {:?}", err)))?;
+        .map_err(|err| Error::new_message(format!("failed to prepare queue list: {:?}", err)))?;
         let mut rows = Vec::new();
         for row in stmt.execute() {
-            let row = row.map_err(|err| Error::new_message(&format!("failed to read queue row: {:?}", err)))?;
-            let queue_name = row
-                .get::<String>(0)
-                .map_err(|err| Error::new_message(&format!("failed to read queue_name: {:?}", err)))?;
-            let created_at = row
-                .get::<i64>(1)
-                .map_err(|err| Error::new_message(&format!("failed to read created_at: {:?}", err)))?;
+            let row = row.map_err(|err| {
+                Error::new_message(format!("failed to read queue row: {:?}", err))
+            })?;
+            let queue_name = row.get::<String>(0).map_err(|err| {
+                Error::new_message(format!("failed to read queue_name: {:?}", err))
+            })?;
+            let created_at = row.get::<i64>(1).map_err(|err| {
+                Error::new_message(format!("failed to read created_at: {:?}", err))
+            })?;
             rows.push(QueueRow {
                 queue_name,
                 created_at,

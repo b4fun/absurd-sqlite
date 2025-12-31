@@ -2,17 +2,18 @@ import sqlite from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
 import { SqliteConnection } from "../src/sqlite";
+import type { SQLiteDatabase } from "../src/sqlite-types";
 
 describe("SqliteConnection", () => {
   it("rewrites postgres-style params and absurd schema names", async () => {
-    const db = new sqlite(":memory:");
+    const db = new sqlite(":memory:") as unknown as SQLiteDatabase;
     const conn = new SqliteConnection(db);
 
     await conn.exec("CREATE TABLE absurd_tasks (id, name)");
-    await conn.exec(
-      "INSERT INTO absurd.tasks (id, name) VALUES ($1, $2)",
-      [1, "alpha"]
-    );
+    await conn.exec("INSERT INTO absurd.tasks (id, name) VALUES ($1, $2)", [
+      1,
+      "alpha",
+    ]);
 
     const { rows } = await conn.query<{ id: number; name: string }>(
       "SELECT id, name FROM absurd.tasks WHERE id = $1",
@@ -24,7 +25,7 @@ describe("SqliteConnection", () => {
   });
 
   it("throws when query is used for non-reader statements", async () => {
-    const db = new sqlite(":memory:");
+    const db = new sqlite(":memory:") as unknown as SQLiteDatabase;
     const conn = new SqliteConnection(db);
 
     await expect(conn.query("CREATE TABLE t (id)")).rejects.toThrow(
@@ -34,7 +35,7 @@ describe("SqliteConnection", () => {
   });
 
   it("decodes JSON from typeless columns", async () => {
-    const db = new sqlite(":memory:");
+    const db = new sqlite(":memory:") as unknown as SQLiteDatabase;
     const conn = new SqliteConnection(db);
 
     await conn.exec("CREATE TABLE t (payload)");
@@ -49,7 +50,7 @@ describe("SqliteConnection", () => {
   });
 
   it("decodes JSON from blob columns", async () => {
-    const db = new sqlite(":memory:");
+    const db = new sqlite(":memory:") as unknown as SQLiteDatabase;
     const conn = new SqliteConnection(db);
 
     await conn.exec("CREATE TABLE t_blob (payload BLOB)");
@@ -66,7 +67,7 @@ describe("SqliteConnection", () => {
   });
 
   it("decodes datetime columns into Date objects", async () => {
-    const db = new sqlite(":memory:");
+    const db = new sqlite(":memory:") as unknown as SQLiteDatabase;
     const conn = new SqliteConnection(db);
     const now = Date.now();
 

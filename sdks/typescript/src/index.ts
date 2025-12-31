@@ -1,10 +1,10 @@
 import { Absurd as AbsurdBase } from "absurd-sdk";
-import sqlite from "better-sqlite3";
 
-import { AbsurdClient } from "./absurd";
+import type { AbsurdClient } from "./absurd-types";
+import type { SQLiteDatabase } from "./sqlite-types";
 import { SqliteConnection } from "./sqlite";
 
-export type { AbsurdClient, Queryable, Worker } from "./absurd";
+export type { AbsurdClient, Queryable, Worker } from "./absurd-types";
 export type {
   AbsurdHooks,
   AbsurdOptions,
@@ -20,16 +20,20 @@ export type {
   TaskRegistrationOptions,
   WorkerOptions,
 } from "absurd-sdk";
+export type {
+  SQLiteBindParams,
+  SQLiteBindValue,
+  SQLiteColumnDefinition,
+  SQLiteDatabase,
+  SQLiteRestBindParams,
+  SQLiteStatement,
+  SQLiteVerboseLog,
+} from "./sqlite-types";
 
 export class Absurd extends AbsurdBase implements AbsurdClient {
-  private db: sqlite.Database;
+  private db: SQLiteDatabase;
 
-  constructor(
-    extensionPath: string,
-    filename?: string,
-    options?: sqlite.Options
-  ) {
-    const db = new sqlite(filename, options);
+  constructor(db: SQLiteDatabase, extensionPath: string) {
     db.loadExtension(extensionPath);
     const queryable = new SqliteConnection(db);
     super(queryable);

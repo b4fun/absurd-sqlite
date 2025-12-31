@@ -31,8 +31,8 @@ fn parse_spawn_options(raw: &str) -> Result<SpawnOptions> {
     if raw.trim().is_empty() {
         return Ok(SpawnOptions::default());
     }
-    let parsed: JsonValue =
-        serde_json::from_str(raw).map_err(|err| Error::new_message(&format!("options must be valid JSON: {:?}", err)))?;
+    let parsed: JsonValue = serde_json::from_str(raw)
+        .map_err(|err| Error::new_message(format!("options must be valid JSON: {:?}", err)))?;
     if parsed.is_null() {
         return Ok(SpawnOptions::default());
     }
@@ -81,8 +81,6 @@ fn parse_spawn_options(raw: &str) -> Result<SpawnOptions> {
         idempotency_key,
     })
 }
-
-
 
 fn spawn_task_impl(
     db: *mut sqlite3,
@@ -200,13 +198,7 @@ fn spawn_task_impl(
             null,
             null
          )",
-        &[
-            queue_name,
-            &run_id,
-            &task_id,
-            &attempt_value,
-            &now_value,
-        ],
+        &[queue_name, &run_id, &task_id, &attempt_value, &now_value],
     )?;
 
     sql::exec_with_bind_text(
@@ -214,7 +206,7 @@ fn spawn_task_impl(
         "update absurd_tasks set last_attempt_run = ?1 where queue_name = ?2 and task_id = ?3",
         &[&run_id, queue_name, &task_id],
     )
-    .map_err(|err| Error::new_message(&format!("task update failed: {:?}", err)))?;
+    .map_err(|err| Error::new_message(format!("task update failed: {:?}", err)))?;
 
     Ok(SpawnResult {
         task_id,
@@ -363,7 +355,7 @@ impl VTabCursor for SpawnTaskCursor {
         _idx_str: Option<&str>,
         values: &[*mut sqlite3_value],
     ) -> Result<()> {
-        let queue_name = api::value_text_notnull(values.get(0).expect("queue_name"))?;
+        let queue_name = api::value_text_notnull(values.first().expect("queue_name"))?;
         let task_name = api::value_text_notnull(values.get(1).expect("task_name"))?;
         let params = api::value_text(values.get(2).expect("params"))?;
         let options_raw = if values.len() > 3 {

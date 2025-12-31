@@ -1,0 +1,22 @@
+{
+  "name": "@absurd-sqlite-samples/typescript-client",
+  "version": "0.1.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --outfile=dist/bundle.js --platform=node --external:better-sqlite3",
+    "start": "node dist/bundle.js",
+    "type-check": "tsc --noEmit"
+  },
+  "author": "",
+  "license": "Apache-2.0",
+  "description": "",
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "esbuild": "0.27.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@absurd-sqlite/sdk": "file:../../sdks/typescript",
+    "better-sqlite3": "^12.5.0"
+  }
+}

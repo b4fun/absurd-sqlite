@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background-color: #f6f6f6;
+}
+
+body {
+  min-height: 100vh;
+  color: #111827;
+  background-color: #f6f6f6;
+}
+
+html {
+  overscroll-behavior: none;
+}
+
+* {
+  box-sizing: border-box;
+}
