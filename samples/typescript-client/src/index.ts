@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Absurd } from "@absurd-sqlite/sdk";
+import { Absurd, SQLiteDatabase } from "@absurd-sqlite/sdk";
+import sqlite from "better-sqlite3";
 
 async function main() {
   const extensionPath = "../../target/release/libabsurd.dylib";
@@ -10,14 +11,15 @@ async function main() {
     (process.platform === "darwin"
       ? join(homedir(), "Library", "Application Support", bundleId)
       : process.platform === "win32"
-        ? join(
-            process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"),
-            bundleId,
-          )
-        : join(homedir(), ".local", "share", bundleId));
+      ? join(
+          process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"),
+          bundleId
+        )
+      : join(homedir(), ".local", "share", bundleId));
   const dbPath = join(appLocalDir, "absurd-sqlite.db");
+  const db = sqlite(dbPath) as unknown as SQLiteDatabase;
 
-  const absurd = new Absurd(extensionPath, dbPath);
+  const absurd = new Absurd(db, extensionPath);
 
   absurd.registerTask(
     {
