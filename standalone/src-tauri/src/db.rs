@@ -158,10 +158,10 @@ fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
 
 fn extension_lib_name() -> String {
     if cfg!(target_os = "windows") {
-        "absurd.dll".to_string()
+        "absurd".to_string()
     } else if cfg!(target_os = "macos") {
-        "libabsurd.dylib".to_string()
+        "libabsurd".to_string()
     } else {
-        "libabsurd.so".to_string()
+        "libabsurd".to_string()
     }
 }
