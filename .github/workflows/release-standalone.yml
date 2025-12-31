@@ -52,4 +52,4 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Standalone ${{ env.RELEASE_VERSION }}
           releaseBody: Automated release for ${{ env.RELEASE_VERSION }}
-          includeDebug: false
+          includeDebug: true
