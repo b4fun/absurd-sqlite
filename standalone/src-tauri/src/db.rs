@@ -78,7 +78,7 @@ impl DatabaseHandle {
                 .context("enable extension loading")?;
             conn.load_extension(
                 extension_path.unwrap().to_string_lossy().as_ref(),
-                None::<&str>,
+                Some("sqlite3_absurd_init"),
             )
             .context("load SQLite extension")?;
             conn.load_extension_disable()
