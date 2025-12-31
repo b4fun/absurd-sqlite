@@ -51,7 +51,7 @@ fn prepare_sqlite_extension() {
     let dest = bin_dir.join("absurd-extension");
     fs::copy(&extension_path, &dest).expect("copy SQLite extension into resources");
     println!(
-        "cargo:warning=Bundling absurd_sqlite_extension from {}",
+        "cargo:info=Copying absurd_sqlite_extension from {}",
         extension_path.display()
     );
 }
