@@ -22,6 +22,7 @@ export class DenoSqliteStatement<
     return this.statement.readonly;
   }
 
+  // FIXME: @db/sqlite does not provide detailed column info
   columns(): SQLiteColumnDefinition[] {
     return this.statement.columnNames().map((name) => ({
       name,
