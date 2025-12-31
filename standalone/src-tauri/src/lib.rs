@@ -50,11 +50,11 @@ pub fn run() {
             dev_api::get_dev_api_status,
             dev_api::set_dev_api_enabled
         ])
-        .on_menu_event(|app, event| {
+        .on_menu_event(|_app, _event| {
             // DevTools is only available in debug builds
             #[cfg(debug_assertions)]
-            if event.id() == DEVTOOLS_MENU_ID {
-                if let Some(window) = app.get_webview_window("main") {
+            if _event.id() == DEVTOOLS_MENU_ID {
+                if let Some(window) = _app.get_webview_window("main") {
                     window.open_devtools();
                 }
             }

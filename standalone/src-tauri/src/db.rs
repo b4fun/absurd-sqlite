@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use rusqlite::Connection;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use tauri::{path::BaseDirectory, AppHandle, Manager};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_cli::ArgData;
 
 enum Source {
@@ -65,24 +65,44 @@ impl DatabaseHandle {
         let db_path = self.db_path(app_handle)?;
         let conn = Connection::open(db_path)?;
 
+        log::info!("using SQLite version: {}", rusqlite::version());
+
         let extension_path = resolve_extension_path(app_handle);
         if extension_path.is_none() {
             // fail early if no extension found
+            log::error!("SQLite extension path could not be resolved");
             return Err(anyhow::anyhow!("SQLite extension not found"));
         }
 
         log::debug!("Loading SQLite extension from {:?}", extension_path);
         // Safety: extension from own build
         unsafe {
-            conn.load_extension_enable()
-                .context("enable extension loading")?;
-            conn.load_extension(
-                extension_path.unwrap().to_string_lossy().as_ref(),
-                None::<&str>,
-            )
-            .context("load SQLite extension")?;
-            conn.load_extension_disable()
-                .context("disable extension loading")?;
+            if let Err(err) = conn
+                .load_extension_enable()
+                .context("enable extension loading")
+            {
+                log::error!("Failed to enable SQLite extension loading: {:#}", err);
+                return Err(err);
+            }
+            // remove the extension part from the path
+            let extension_path_no_ext = extension_path.unwrap().with_extension("");
+            if let Err(err) = conn
+                .load_extension(
+                    extension_path_no_ext.to_string_lossy().as_ref(),
+                    Some("sqlite3_absurd_init"),
+                )
+                .context("load SQLite extension")
+            {
+                log::error!("Failed to load SQLite extension: {:#}", err);
+                return Err(err);
+            }
+            if let Err(err) = conn
+                .load_extension_disable()
+                .context("disable extension loading")
+            {
+                log::error!("Failed to disable SQLite extension loading: {:#}", err);
+                return Err(err);
+            }
         }
         log::debug!("SQLite extension loaded successfully");
 
@@ -91,24 +111,27 @@ impl DatabaseHandle {
 }
 
 fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
-    let triple = std::env::var("TAURI_TARGET_TRIPLE").unwrap_or_else(|_| "unknown".to_string());
-    let bin_name = format!(
-        "absurd-extension-{}{}",
-        triple,
-        if cfg!(target_os = "windows") {
-            ".exe"
-        } else {
-            ""
+    let lib_name = extension_lib_name();
+    match app_handle.path().resource_dir() {
+        Ok(resource_dir) => {
+            let resource_path = resource_dir.join("resources").join(&lib_name);
+            log::debug!(
+                "Checking resource SQLite extension at {}",
+                resource_path.display()
+            );
+            if resource_path.exists() {
+                log::info!(
+                    "Using resource SQLite extension at {}",
+                    resource_path.display()
+                );
+                return Some(resource_path);
+            }
+            log::warn!(
+                "SQLite extension not found in resources at {}",
+                resource_path.display()
+            );
         }
-    );
-
-    if let Ok(path) = app_handle
-        .path()
-        .resolve(Path::new("bin").join(&bin_name), BaseDirectory::Resource)
-    {
-        if path.exists() {
-            return Some(path);
-        }
+        Err(err) => log::warn!("Failed to resolve resource directory: {}", err),
     }
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -117,16 +140,23 @@ fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
         .and_then(Path::parent)
         .unwrap_or(&manifest_dir);
     let target_dir = workspace_root.join("target");
-    let lib_name = extension_lib_name();
-    let debug_path = target_dir.join("debug").join(&lib_name);
-    if debug_path.exists() {
-        return Some(debug_path);
-    }
-    let release_path = target_dir.join("release").join(&lib_name);
-    if release_path.exists() {
-        return Some(release_path);
+    let candidates = [
+        ("debug build", target_dir.join("debug").join(&lib_name)),
+        ("release build", target_dir.join("release").join(&lib_name)),
+    ];
+
+    for (label, path) in candidates {
+        log::debug!("Checking {} SQLite extension at {}", label, path.display());
+        if path.exists() {
+            log::info!("Using {} SQLite extension at {}", label, path.display());
+            return Some(path);
+        }
     }
 
+    log::warn!(
+        "SQLite extension not found. Checked bundled resources and build outputs in {}",
+        target_dir.display()
+    );
     None
 }
 

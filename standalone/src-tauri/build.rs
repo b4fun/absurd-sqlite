@@ -1,4 +1,4 @@
-use std::{env, fs, path::PathBuf};
+use std::{env, fs, path::PathBuf, process::Command};
 
 fn main() {
     prepare_sqlite_extension();
@@ -35,31 +35,37 @@ fn prepare_sqlite_extension() {
         target_dir.join(&profile).join(dylib_name),
     ];
 
-    let extension_path = candidates.into_iter().find(|path| path.exists()).unwrap_or_else(|| {
-        panic!(
-            "absurd_sqlite_extension artifact not found. Build it with `cargo build -p absurd_sqlite_extension --target {target_triple} {}` first.",
-            if profile == "debug" {
-                "".to_string()
-            } else {
-                format!("--profile {profile}")
-            }
-        );
-    });
-
-    let bin_dir = manifest_dir.join("bin");
-    fs::create_dir_all(&bin_dir).expect("create bin directory");
-    let dest = bin_dir.join(format!(
-        "absurd-extension-{}{}",
-        target_triple,
-        if target_triple.contains("windows") {
-            ".exe"
-        } else {
-            ""
+    if candidates.iter().all(|path| !path.exists()) {
+        let mut cmd = Command::new("cargo");
+        cmd.current_dir(workspace_root)
+            .args(["build", "-p", "absurd_sqlite_extension"])
+            .arg("--target")
+            .arg(&target_triple);
+        if profile != "debug" {
+            cmd.arg("--profile").arg(&profile);
         }
-    ));
+        let status = cmd
+            .status()
+            .expect("failed to invoke cargo build for absurd-sqlite-extension");
+        if !status.success() {
+            panic!("cargo build -p absurd-sqlite-extension failed");
+        }
+    }
+
+    let extension_path = candidates
+        .into_iter()
+        .find(|path| path.exists())
+        .unwrap_or_else(|| {
+            panic!("absurd_sqlite_extension artifact not found after build");
+        });
+
+    let resources_dir = manifest_dir.join("resources");
+    fs::create_dir_all(&resources_dir).expect("create resources directory");
+    let dest = resources_dir.join(dylib_name);
     fs::copy(&extension_path, &dest).expect("copy SQLite extension into resources");
     println!(
-        "cargo:warning=Bundling absurd_sqlite_extension from {}",
-        extension_path.display()
+        "cargo:info=Copying absurd_sqlite_extension from {} to {}",
+        extension_path.display(),
+        dest.display()
     );
 }
