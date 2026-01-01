@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "@db/sqlite": "jsr:@db/sqlite@^0.13.0",
+    "absurd-sdk": "npm:absurd-sdk@^0.0.7"
+  }
+}
