@@ -411,6 +411,10 @@ fn handle_procedure(
             let status = worker::get_worker_status_inner(app_handle)?;
             Ok(serde_json::to_value(status).map_err(|err| err.to_string())?)
         }
+        "getWorkerLogs" => {
+            let logs = worker::get_worker_logs(app_handle.clone())?;
+            Ok(serde_json::to_value(logs).map_err(|err| err.to_string())?)
+        }
         "setWorkerBinaryPath" => {
             let payload: WorkerPathInput = parse_input(input)?;
             let status = worker::set_worker_binary_path_inner(app_handle, &payload.path)?;

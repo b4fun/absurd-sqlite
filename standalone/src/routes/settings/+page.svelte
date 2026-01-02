@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import Button from "$lib/components/Button.svelte";
   import {
     getAbsurdProvider,
     isTauriRuntime,
     type MigrationEntry,
     type SettingsInfo,
+    type WorkerLogLine,
     type WorkerStatus,
   } from "$lib/providers/absurdData";
   import { invoke } from "@tauri-apps/api/core";
@@ -31,6 +32,11 @@
   let workerPathTouched = $state(false);
   let workerError = $state<string | null>(null);
   let workerAction = $state<"idle" | "saving" | "starting" | "stopping">("idle");
+  let workerLogs = $state<WorkerLogLine[]>([]);
+  let workerLogsRef = $state<HTMLDivElement | null>(null);
+  let workerLogsOpen = $state(false);
+  let workerLogsError = $state<string | null>(null);
+  let workerLogsTimer: ReturnType<typeof setInterval> | null = null;
   const data = $derived(settings ?? defaults);
   const statusLabel = $derived(
     data.migration.status === "applied" ? "Up to date" : "Not applied",
@@ -106,6 +112,9 @@
     }
     if (showDevApi) {
       devApiStatus = await invoke<DevApiStatus>("get_dev_api_status");
+    }
+    if (workerLogsOpen) {
+      await fetchWorkerLogs();
     }
   };
 
@@ -215,8 +224,62 @@
     }
   };
 
+  const fetchWorkerLogs = async () => {
+    if (!workerLogsOpen) {
+      return;
+    }
+    try {
+      const data = await provider.getWorkerLogs();
+      workerLogs = data.lines;
+      requestAnimationFrame(() => {
+        if (!workerLogsRef) {
+          return;
+        }
+        workerLogsRef.scrollTop = workerLogsRef.scrollHeight;
+      });
+      workerLogsError = null;
+    } catch (error) {
+      workerLogsError =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Failed to load worker logs.";
+    }
+  };
+
+  const startWorkerLogsPolling = () => {
+    if (workerLogsTimer) {
+      return;
+    }
+    workerLogsTimer = setInterval(() => {
+      void fetchWorkerLogs();
+    }, 1000);
+    void fetchWorkerLogs();
+  };
+
+  const stopWorkerLogsPolling = () => {
+    if (workerLogsTimer) {
+      clearInterval(workerLogsTimer);
+      workerLogsTimer = null;
+    }
+  };
+
+  const handleToggleWorkerLogs = () => {
+    workerLogsOpen = !workerLogsOpen;
+    if (workerLogsOpen) {
+      startWorkerLogsPolling();
+    } else {
+      stopWorkerLogsPolling();
+    }
+  };
+
   onMount(() => {
     void refreshData();
+  });
+
+  onDestroy(() => {
+    stopWorkerLogsPolling();
   });
 
   type DevApiStatus = {
@@ -350,6 +413,39 @@
         </Button>
       </div>
     </div>
+    <div class="mt-4 flex flex-wrap items-center gap-3">
+      <Button
+        type="button"
+        class="rounded-md border border-black/10 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600"
+        onclick={handleToggleWorkerLogs}
+        disabled={!workerReady}
+      >
+        {workerLogsOpen ? "Hide logs" : "Show logs"}
+      </Button>
+    </div>
+    {#if workerLogsOpen}
+      <div class="mt-3 rounded-md border border-black/10 bg-slate-50">
+        <div
+          class="h-56 overflow-auto px-3 py-2 font-mono text-xs text-slate-700"
+          bind:this={workerLogsRef}
+        >
+          {#if workerLogs.length === 0}
+            <p class="text-slate-400">No logs yet.</p>
+          {:else}
+            {#each workerLogs as logLine}
+              <div class="flex gap-2">
+                <span class="text-slate-400">{logLine.timestamp}</span>
+                <span class="uppercase text-slate-500">{logLine.stream}</span>
+                <span class="whitespace-pre-wrap">{logLine.line}</span>
+              </div>
+            {/each}
+          {/if}
+        </div>
+      </div>
+      {#if workerLogsError}
+        <p class="mt-2 text-xs text-rose-600">{workerLogsError}</p>
+      {/if}
+    {/if}
     {#if workerError}
       <p class="mt-3 text-sm text-rose-600">{workerError}</p>
     {/if}

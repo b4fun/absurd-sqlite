@@ -1,3 +1,4 @@
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::VecDeque;
@@ -14,6 +15,7 @@ const WORKER_STORE_PATH: &str = "worker.json";
 const WORKER_PATH_KEY: &str = "worker_binary_path";
 const CRASH_WINDOW_MS: i64 = 60_000;
 const CRASH_THRESHOLD: usize = 3;
+const LOG_BUFFER_LIMIT: usize = 500;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,6 +24,20 @@ pub struct WorkerStatus {
     pub running: bool,
     pub pid: Option<u32>,
     pub crashing: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkerLogLine {
+    pub timestamp: String,
+    pub stream: String,
+    pub line: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkerLogs {
+    pub lines: Vec<WorkerLogLine>,
 }
 
 struct CrashTracker {
@@ -76,6 +92,7 @@ pub struct WorkerState {
     running: Mutex<Option<RunningWorker>>,
     crash_tracker: Mutex<CrashTracker>,
     stop_requested: Mutex<bool>,
+    log_buffer: Mutex<VecDeque<WorkerLogLine>>,
 }
 
 impl WorkerState {
@@ -85,6 +102,7 @@ impl WorkerState {
             running: Mutex::new(None),
             crash_tracker: Mutex::new(CrashTracker::new(CRASH_WINDOW_MS, CRASH_THRESHOLD)),
             stop_requested: Mutex::new(false),
+            log_buffer: Mutex::new(VecDeque::with_capacity(LOG_BUFFER_LIMIT)),
         }
     }
 
@@ -103,6 +121,11 @@ impl WorkerState {
             pid,
             crashing,
         }
+    }
+
+    fn logs(&self) -> WorkerLogs {
+        let lines = self.log_buffer.lock().unwrap().iter().cloned().collect();
+        WorkerLogs { lines }
     }
 }
 
@@ -152,6 +175,12 @@ pub fn get_worker_status(app_handle: AppHandle) -> Result<WorkerStatus, String> 
 pub fn get_worker_status_inner(app_handle: &AppHandle) -> Result<WorkerStatus, String> {
     let state = app_handle.state::<WorkerState>();
     Ok(state.status())
+}
+
+#[tauri::command]
+pub fn get_worker_logs(app_handle: AppHandle) -> Result<WorkerLogs, String> {
+    let state = app_handle.state::<WorkerState>();
+    Ok(state.logs())
 }
 
 #[tauri::command(async)]
@@ -251,15 +280,18 @@ pub fn start_worker_inner(app_handle: &AppHandle) -> Result<WorkerStatus, String
                 }
                 CommandEvent::Error(err) => {
                     log::warn!("Worker process error: {}", err);
+                    push_worker_log(&app_handle, "stderr", err);
                 }
                 CommandEvent::Stderr(line) => {
                     if let Ok(message) = String::from_utf8(line) {
                         log::info!("Worker stderr: {}", message.trim());
+                        push_worker_log(&app_handle, "stderr", message);
                     }
                 }
                 CommandEvent::Stdout(line) => {
                     if let Ok(message) = String::from_utf8(line) {
                         log::info!("Worker stdout: {}", message.trim());
+                        push_worker_log(&app_handle, "stdout", message);
                     }
                 }
                 _ => {}
@@ -390,6 +422,27 @@ fn current_time_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
     now.as_millis() as i64
+}
+
+fn push_worker_log(app_handle: &AppHandle, stream: &str, line: String) {
+    let trimmed = line.trim_end_matches(['\n', '\r']);
+    if trimmed.is_empty() {
+        return;
+    }
+    let state = app_handle.state::<WorkerState>();
+    let mut buffer = state.log_buffer.lock().unwrap();
+    buffer.push_back(WorkerLogLine {
+        timestamp: format_log_timestamp(),
+        stream: stream.to_string(),
+        line: trimmed.to_string(),
+    });
+    while buffer.len() > LOG_BUFFER_LIMIT {
+        buffer.pop_front();
+    }
+}
+
+fn format_log_timestamp() -> String {
+    Local::now().format("%H:%M:%S").to_string()
 }
 
 #[cfg(test)]

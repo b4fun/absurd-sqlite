@@ -100,6 +100,16 @@ export type WorkerStatus = {
   crashing: boolean;
 };
 
+export type WorkerLogLine = {
+  timestamp: string;
+  stream: "stdout" | "stderr";
+  line: string;
+};
+
+export type WorkerLogs = {
+  lines: WorkerLogLine[];
+};
+
 export type MigrationEntry = {
   id: number;
   introducedVersion: string;
@@ -124,6 +134,7 @@ export type AbsurdDataProvider = {
   getFilteredEvents: (filters: { queueName?: string; eventName?: string }) => Promise<EventEntry[]>;
   getSettingsInfo: () => Promise<SettingsInfo>;
   getWorkerStatus: () => Promise<WorkerStatus>;
+  getWorkerLogs: () => Promise<WorkerLogs>;
   setWorkerBinaryPath: (path: string) => Promise<WorkerStatus>;
   startWorker: () => Promise<WorkerStatus>;
   stopWorker: () => Promise<WorkerStatus>;
@@ -160,6 +171,7 @@ export const tauriAbsurdProvider: AbsurdDataProvider = {
   getFilteredEvents: (filters) => tauriInvoke("get_filtered_events", { filters }),
   getSettingsInfo: () => tauriInvoke("get_settings_info"),
   getWorkerStatus: () => tauriInvoke("get_worker_status"),
+  getWorkerLogs: () => tauriInvoke("get_worker_logs"),
   setWorkerBinaryPath: (path) => tauriInvoke("set_worker_binary_path", { path }),
   startWorker: () => tauriInvoke("start_worker"),
   stopWorker: () => tauriInvoke("stop_worker"),
@@ -190,6 +202,12 @@ let mockWorkerStatus: WorkerStatus = {
   pid: null,
   crashing: false,
 };
+
+const mockWorkerLogs: WorkerLogLine[] = [
+  { timestamp: "12:01:22", stream: "stdout", line: "worker started" },
+  { timestamp: "12:01:23", stream: "stderr", line: "warning: sample log output" },
+  { timestamp: "12:01:24", stream: "stdout", line: "ready for tasks" },
+];
 
 const DEV_API_PORT_BASE = 11223;
 const DEV_API_PORT_ATTEMPTS = 10;
@@ -331,6 +349,7 @@ const trpcAbsurdProvider: AbsurdDataProvider = {
   getFilteredEvents: (filters) => trpcQuery("getFilteredEvents", filters),
   getSettingsInfo: () => trpcQuery("getSettingsInfo"),
   getWorkerStatus: () => trpcQuery("getWorkerStatus"),
+  getWorkerLogs: () => trpcQuery("getWorkerLogs"),
   setWorkerBinaryPath: (path) => trpcMutation("setWorkerBinaryPath", { path }),
   startWorker: () => trpcMutation("startWorker"),
   stopWorker: () => trpcMutation("stopWorker"),
@@ -633,6 +652,7 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
     },
   }),
   getWorkerStatus: async () => ({ ...mockWorkerStatus }),
+  getWorkerLogs: async () => ({ lines: [...mockWorkerLogs] }),
   setWorkerBinaryPath: async (path: string) => {
     mockWorkerStatus = {
       ...mockWorkerStatus,

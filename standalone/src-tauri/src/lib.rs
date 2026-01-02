@@ -50,6 +50,7 @@ pub fn run() {
             dev_api::get_dev_api_status,
             dev_api::set_dev_api_enabled,
             worker::get_worker_status,
+            worker::get_worker_logs,
             worker::set_worker_binary_path,
             worker::start_worker,
             worker::stop_worker
