@@ -1,27 +1,48 @@
-import { Absurd as AbsurdBase } from "absurd-sdk";
-
-import type { AbsurdClient } from "./absurd-types.ts";
-import type { SQLiteDatabase } from "./sqlite-types.ts";
-import { SqliteConnection } from "./sqlite.ts";
-
-export type { AbsurdClient, Queryable, Worker } from "./absurd-types.ts";
-export { Database } from "@db/sqlite";
-export type { DatabaseOpenOptions } from "@db/sqlite";
-export type {
+import type {
+  AbsurdClient,
   AbsurdHooks,
   AbsurdOptions,
   CancellationPolicy,
   ClaimedTask,
   JsonObject,
   JsonValue,
+  Queryable,
   RetryStrategy,
   SpawnOptions,
   SpawnResult,
-  TaskContext,
   TaskHandler,
   TaskRegistrationOptions,
+  Worker,
   WorkerOptions,
-} from "absurd-sdk";
+} from "./absurd-types.ts";
+
+import type { SQLiteDatabase } from "./sqlite-types.ts";
+import {
+  AbsurdBase,
+  CancelledTask,
+  SuspendTask,
+  TaskContext,
+  TimeoutError,
+} from "./absurd-base.ts";
+import { SqliteConnection } from "./sqlite.ts";
+
+export type {
+  AbsurdClient,
+  AbsurdHooks,
+  AbsurdOptions,
+  CancellationPolicy,
+  ClaimedTask,
+  JsonObject,
+  JsonValue,
+  Queryable,
+  RetryStrategy,
+  SpawnOptions,
+  SpawnResult,
+  TaskHandler,
+  TaskRegistrationOptions,
+  Worker,
+  WorkerOptions,
+};
 export type {
   SQLiteBindParams,
   SQLiteBindValue,
@@ -31,6 +52,11 @@ export type {
   SQLiteStatement,
   SQLiteVerboseLog,
 } from "./sqlite-types.ts";
+
+export { AbsurdBase, CancelledTask, SuspendTask, TaskContext, TimeoutError };
+
+export { Database } from "@db/sqlite";
+export type { DatabaseOpenOptions } from "@db/sqlite";
 export {
   createAbsurdWithDenoSqlite,
   DenoSqliteDatabase,
@@ -42,15 +68,19 @@ export {
 export class Absurd extends AbsurdBase implements AbsurdClient {
   private db: SQLiteDatabase;
 
-  constructor(db: SQLiteDatabase, extensionPath: string) {
+  constructor(
+    db: SQLiteDatabase,
+    extensionPath: string,
+    options?: Omit<AbsurdOptions, "db">,
+  ) {
     db.loadExtension(extensionPath);
     const queryable = new SqliteConnection(db);
-    super(queryable);
+    super({ ...(options ?? {}), db: queryable });
     this.db = db;
   }
 
-  override close(): Promise<void> {
+  override async close(): Promise<void> {
+    await super.close();
     this.db.close();
-    return Promise.resolve();
   }
 }

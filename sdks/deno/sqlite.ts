@@ -1,6 +1,5 @@
 import type { Queryable } from "./absurd-types.ts";
 import type {
-  SQLiteBindParams,
   SQLiteBindValue,
   SQLiteDatabase,
   SQLiteRestBindParams,
@@ -25,7 +24,7 @@ export class SqliteConnection implements Queryable {
 
     const statement = this.db.prepare(sqliteQuery);
     if (!statement.readonly) {
-      // This indicates `return_data` is false
+      // this indicates `return_data` is false
       // https://github.com/WiseLibs/better-sqlite3/blob/6209be238d6a1b181f516e4e636986604b0f62e1/src/objects/statement.cpp#L134C83-L134C95
       return Promise.reject(
         new Error("The query() method is only statements that return data"),
@@ -34,9 +33,9 @@ export class SqliteConnection implements Queryable {
 
     const rowsDecoded = statement
       .all(sqliteParams)
-      .map((row) => decodeRowValues(statement, row)) as R[];
+      .map((row) => decodeRowValues(statement, row));
 
-    return Promise.resolve({ rows: rowsDecoded });
+    return Promise.resolve({ rows: rowsDecoded as R[] });
   }
 
   exec(sql: string, params?: SQLiteRestBindParams): Promise<void> {
@@ -51,6 +50,7 @@ export class SqliteConnection implements Queryable {
 const namedParamPrefix = "p";
 
 function rewritePostgresQuery(text: string): string {
+  // TODO: drop postgres query rewrite once callers use SQLite-native SQL.
   return text
     .replace(/\$(\d+)/g, `:${namedParamPrefix}$1`)
     .replace(/absurd\.(\w+)/g, "absurd_$1");
@@ -58,21 +58,17 @@ function rewritePostgresQuery(text: string): string {
 
 function rewritePostgresParams(
   params?: SQLiteRestBindParams,
-): SQLiteBindParams {
+): Record<string, SQLiteBindValue> {
   if (!params) {
     return {};
-  }
-
-  if (!Array.isArray(params)) {
-    return params as SQLiteBindParams;
   }
 
   const rewrittenParams: Record<string, SQLiteBindValue> = {};
   params.forEach((value, index) => {
     const paramKey = `${namedParamPrefix}${index + 1}`;
-    const encodedParamValue = encodeColumnValue(value);
+    const encodedParamValue = encodeColumnValue(value as SQLiteBindValue);
 
-    rewrittenParams[paramKey] = encodedParamValue as SQLiteBindValue;
+    rewrittenParams[paramKey] = encodedParamValue;
   });
   return rewrittenParams;
 }
@@ -110,6 +106,7 @@ function decodeColumnValue<V = unknown>(
   columnType: string | null,
   verbose?: SQLiteVerboseLog,
 ): V | null {
+  // TODO: address type conversion issues with NULL/JSON detection across drivers.
   if (value === null || value === undefined) {
     return null;
   }
@@ -130,10 +127,6 @@ function decodeColumnValue<V = unknown>(
       if (parsed) {
         return parsed as V;
       }
-    }
-
-    if (typeof value === "bigint") {
-      return normalizeBigInt(value) as V;
     }
 
     if (typeof value === "string") {
@@ -164,10 +157,7 @@ function decodeColumnValue<V = unknown>(
   if (columnTypeName === "blob") {
     // BLOB values are JSON string decoded from JSONB
     try {
-      const raw = value instanceof Uint8Array
-        ? new TextDecoder().decode(value)
-        : value.toString();
-      return JSON.parse(raw) as V;
+      return JSON.parse(value.toString()) as V;
     } catch (e) {
       verbose?.(`Failed to decode BLOB column ${columnName} as JSON`, e);
       throw e;
@@ -180,14 +170,11 @@ function decodeColumnValue<V = unknown>(
       return parsed as V;
     }
     throw new Error(
-      `Expected datetime column ${columnName} to be a number or string, got ${typeof value}`,
+      `Expected datetime column ${columnName} to be a number, got ${typeof value}`,
     );
   }
 
   // For other types, return as is
-  if (typeof value === "bigint") {
-    return normalizeBigInt(value) as V;
-  }
   return value as V;
 }
 
@@ -208,9 +195,6 @@ function parseDateValue(
   if (typeof value === "number") {
     return new Date(value);
   }
-  if (typeof value === "bigint") {
-    return new Date(Number(value));
-  }
   if (typeof value === "string") {
     const numeric = Number(value);
     if (!Number.isNaN(numeric)) {
@@ -225,20 +209,12 @@ function parseDateValue(
   return null;
 }
 
-function normalizeBigInt(value: bigint): number | bigint {
-  const asNumber = Number(value);
-  if (Number.isSafeInteger(asNumber)) {
-    return asNumber;
-  }
-  return value;
-}
-
-function encodeColumnValue(value: unknown): SQLiteBindValue {
+function encodeColumnValue(value: SQLiteBindValue): SQLiteBindValue {
   if (value instanceof Date) {
     return value.toISOString();
   }
   if (typeof value === "number" && Number.isInteger(value)) {
     return value.toString();
   }
-  return value as SQLiteBindValue;
+  return value;
 }

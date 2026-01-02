@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "imports": {
-    "absurd-sdk": "npm:absurd-sdk@0.0.7",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0"
   }
 }

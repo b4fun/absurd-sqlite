@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { TimeoutError } from "absurd-sdk";
+import { TimeoutError } from "../mod.ts";
 
 import { randomName, withTestContext } from "./setup.ts";
 import { assertMatchObject } from "./utils.ts";

@@ -1,10 +1,11 @@
 import { Database, type DatabaseOpenOptions, type Statement } from "@db/sqlite";
+import { Buffer } from "node:buffer";
 
 import { Absurd } from "./mod.ts";
 import type {
-  SQLiteBindParams,
   SQLiteColumnDefinition,
   SQLiteDatabase,
+  SQLiteRestBindParams,
   SQLiteStatement,
 } from "./sqlite-types.ts";
 
@@ -33,17 +34,28 @@ export class DenoSqliteStatement<
     }));
   }
 
-  all(params?: SQLiteBindParams): Result[] {
-    return params === undefined
-      ? this.statement.all()
-      : this.statement.all(params);
+  all(...args: SQLiteRestBindParams): Result[] {
+    const rows = this.statement.all(...args);
+    return rows.map((row) =>
+      normalizeRow(row as Record<string, unknown>)
+    ) as Result[];
   }
 
-  run(params?: SQLiteBindParams): number {
-    return params === undefined
-      ? this.statement.run()
-      : this.statement.run(params);
+  run(...args: SQLiteRestBindParams): number {
+    return this.statement.run(...args);
   }
+}
+
+function normalizeRow(row: Record<string, unknown>): Record<string, unknown> {
+  const normalized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (value instanceof Uint8Array) {
+      normalized[key] = Buffer.from(value);
+    } else {
+      normalized[key] = value;
+    }
+  }
+  return normalized;
 }
 
 export class DenoSqliteDatabase implements SQLiteDatabase {

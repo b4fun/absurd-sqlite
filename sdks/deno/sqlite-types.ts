@@ -1,24 +1,10 @@
-import type { Buffer } from "node:buffer";
+import type {
+  SQLiteBindParams,
+  SQLiteBindValue,
+  SQLiteRestBindParams,
+} from "./absurd-types.ts";
 
-export type SQLiteBindValue =
-  | number
-  | string
-  | Uint8Array
-  | Buffer
-  | bigint
-  | boolean
-  | symbol
-  | Date
-  | null
-  | undefined
-  | SQLiteBindValue[]
-  | { [key: string]: SQLiteBindValue };
-
-export type SQLiteBindParams =
-  | SQLiteBindValue[]
-  | Record<string, SQLiteBindValue>;
-
-export type SQLiteRestBindParams = SQLiteBindParams;
+export type { SQLiteBindParams, SQLiteBindValue, SQLiteRestBindParams };
 
 export interface SQLiteColumnDefinition {
   name: string;
@@ -33,8 +19,8 @@ export interface SQLiteStatement<
 > {
   readonly: boolean;
   columns(): SQLiteColumnDefinition[];
-  all(params?: SQLiteBindParams): Result[];
-  run(params?: SQLiteBindParams): number;
+  all(...args: SQLiteRestBindParams): Result[];
+  run(...args: SQLiteRestBindParams): number;
 }
 
 export interface SQLiteDatabase {

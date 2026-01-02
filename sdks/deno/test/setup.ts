@@ -1,11 +1,7 @@
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  Absurd as AbsurdBase,
-  type AbsurdHooks,
-  type JsonValue,
-} from "absurd-sdk";
+import { AbsurdBase, type AbsurdHooks, type JsonValue } from "../mod.ts";
 
 import { SqliteConnection } from "../sqlite.ts";
 import type { Absurd } from "../mod.ts";

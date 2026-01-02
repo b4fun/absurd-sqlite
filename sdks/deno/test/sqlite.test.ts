@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 
 import { Database, DenoSqliteDatabase } from "../mod.ts";
 import { SqliteConnection } from "../sqlite.ts";
@@ -57,7 +58,7 @@ Deno.test("sqlite: decodes JSON from blob columns", async () => {
 
   await conn.exec("CREATE TABLE t_blob (payload BLOB)");
   await conn.exec("INSERT INTO t_blob (payload) VALUES ($1)", [
-    new TextEncoder().encode(JSON.stringify({ b: 2 })),
+    Buffer.from(JSON.stringify({ b: 2 })),
   ]);
 
   const { rows } = await conn.query<{ payload: { b: number } }>(
