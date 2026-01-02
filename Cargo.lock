@@ -26,11 +26,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "absurd-sqlite-deno-runtime"
-version = "0.1.0"
-
-[[package]]
-name = "absurd_sqlite_extension"
+name = "absurd-sqlite-extension"
 version = "0.1.0"
 dependencies = [
  "chrono",

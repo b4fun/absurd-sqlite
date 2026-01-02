@@ -38,7 +38,7 @@ fn prepare_sqlite_extension() {
     if candidates.iter().all(|path| !path.exists()) {
         let mut cmd = Command::new("cargo");
         cmd.current_dir(workspace_root)
-            .args(["build", "-p", "absurd_sqlite_extension"])
+            .args(["build", "-p", "absurd-sqlite-extension"])
             .arg("--target")
             .arg(&target_triple);
         if profile != "debug" {
@@ -56,7 +56,7 @@ fn prepare_sqlite_extension() {
         .into_iter()
         .find(|path| path.exists())
         .unwrap_or_else(|| {
-            panic!("absurd_sqlite_extension artifact not found after build");
+            panic!("absurd-sqlite-extension artifact not found after build");
         });
 
     let resources_dir = manifest_dir.join("resources");
@@ -64,7 +64,7 @@ fn prepare_sqlite_extension() {
     let dest = resources_dir.join(dylib_name);
     fs::copy(&extension_path, &dest).expect("copy SQLite extension into resources");
     println!(
-        "cargo:info=Copying absurd_sqlite_extension from {} to {}",
+        "cargo:info=Copying absurd-sqlite-extension from {} to {}",
         extension_path.display(),
         dest.display()
     );

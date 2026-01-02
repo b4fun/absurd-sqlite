@@ -22,10 +22,10 @@ jobs:
           components: rustfmt, clippy
 
       - name: Format check
-        run: cargo fmt -p absurd_sqlite_extension -- --check
+        run: cargo fmt -p absurd-sqlite-extension -- --check
 
       - name: Lint
-        run: cargo clippy -p absurd_sqlite_extension -- -D warnings
+        run: cargo clippy -p absurd-sqlite-extension -- -D warnings
 
       - name: Unit tests
-        run: cargo test -p absurd_sqlite_extension
+        run: cargo test -p absurd-sqlite-extension
