@@ -90,6 +90,7 @@ export type SettingsInfo = {
   absurdVersion: string;
   sqliteVersion: string;
   dbPath: string;
+  dbSizeBytes: number | null;
   migration: MigrationStatus;
 };
 
@@ -644,6 +645,7 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
     absurdVersion: "absurd-sqlite/0.0.0",
     sqliteVersion: "3.45.0",
     dbPath: "/Users/demo/Library/Application Support/absurd-sqlite.db",
+    dbSizeBytes: 7340032,
     migration: {
       status: "applied",
       appliedCount: 1,

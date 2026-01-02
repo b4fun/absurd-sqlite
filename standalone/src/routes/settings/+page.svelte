@@ -16,6 +16,7 @@
     absurdVersion: "--",
     sqliteVersion: "--",
     dbPath: "--",
+    dbSizeBytes: null,
     migration: {
       status: "missing",
       appliedCount: 0,
@@ -56,6 +57,7 @@
   const showDevApi = $derived(isTauriRuntime());
   const normalizedWorkerPath = $derived(workerPathDraft.trim());
   const workerReady = $derived(workerStatus !== null);
+  const dbSizeLabel = $derived.by(() => formatBytes(data.dbSizeBytes));
   const workerPathDirty = $derived(
     workerStatus ? (workerStatus.configuredPath ?? "") !== normalizedWorkerPath : false,
   );
@@ -297,6 +299,23 @@
       enabled: !devApiStatus.enabled,
     });
   };
+
+  function formatBytes(bytes: number | null) {
+    if (bytes === null || Number.isNaN(bytes)) {
+      return "—";
+    }
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+    const units = ["KB", "MB", "GB", "TB"];
+    let value = bytes / 1024;
+    let unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+    return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+  }
 </script>
 
 <section class="flex flex-wrap items-start justify-between gap-4">
@@ -336,20 +355,27 @@
     <p class="mt-1 text-sm text-slate-500">Primary storage location for task data.</p>
     <dl class="mt-4 space-y-3 text-sm">
       <div class="space-y-2">
-        <div class="flex items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <dt class="text-slate-500">File path</dt>
-          <Button
-            type="button"
-            class="rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!canCopyPath}
-            onclick={handleCopyPath}
-          >
-            {copyStatus === "copied"
-              ? "Copied"
-              : copyStatus === "error"
-                ? "Copy failed"
-                : "Copy"}
-          </Button>
+          <div class="flex items-center gap-2">
+            <span
+              class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600"
+            >
+              {dbSizeLabel}
+            </span>
+            <Button
+              type="button"
+              class="rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!canCopyPath}
+              onclick={handleCopyPath}
+            >
+              {copyStatus === "copied"
+                ? "Copied"
+                : copyStatus === "error"
+                  ? "Copy failed"
+                  : "Copy"}
+            </Button>
+          </div>
         </div>
         <dd class="break-all rounded-md border border-black/10 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700">
           {data.dbPath}

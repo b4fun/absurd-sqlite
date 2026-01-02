@@ -137,6 +137,7 @@ pub struct SettingsInfo {
     pub absurd_version: String,
     pub sqlite_version: String,
     pub db_path: String,
+    pub db_size_bytes: Option<u64>,
     pub migration: MigrationStatus,
 }
 
@@ -555,6 +556,7 @@ impl<'a> TauriDataProvider<'a> {
         let sqlite_version: String = self
             .conn
             .query_row("select sqlite_version()", [], |row| row.get(0))?;
+        let db_size_bytes = std::fs::metadata(&db_path).map(|meta| meta.len()).ok();
 
         let applied_count: i64 = self
             .conn
@@ -588,6 +590,7 @@ impl<'a> TauriDataProvider<'a> {
             absurd_version,
             sqlite_version,
             db_path,
+            db_size_bytes,
             migration: MigrationStatus {
                 status,
                 applied_count,
