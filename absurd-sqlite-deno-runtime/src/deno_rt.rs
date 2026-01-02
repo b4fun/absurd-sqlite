@@ -8,14 +8,14 @@ use deno_ast::{MediaType, ParseParams};
 use deno_core::error::{AnyError, CoreError};
 use deno_core::{
     ModuleCodeString, ModuleLoadOptions, ModuleLoadReferrer, ModuleLoadResponse, ModuleSource,
-    ModuleSourceCode, ModuleSpecifier, ModuleType, ResolutionKind,
+    ModuleSourceCode, ModuleSpecifier, ModuleType, RequestedModuleType, ResolutionKind,
 };
 use deno_error::JsErrorBox;
 use deno_npm::resolution::NpmResolutionSnapshot;
 use deno_npm::resolution::ValidSerializedNpmResolutionSnapshot;
-use deno_semver::VersionReq;
 use deno_semver::npm::{NpmPackageNvReference, NpmPackageReqReference};
 use deno_semver::package::PackageNv;
+use deno_semver::{Version, VersionReq};
 use futures::io::BufReader;
 use import_map::ImportMap;
 use serde_json::Value;
@@ -171,13 +171,63 @@ impl ModuleLoader {
 
     fn try_resolve_jsr_specifier(&self, specifier: &str) -> Option<ModuleSpecifier> {
         let specifier = specifier.strip_prefix("jsr:")?;
-        let (package, version) = specifier.rsplit_once('@')?;
-        let version = version.strip_prefix('^').unwrap_or(version);
-        if package.is_empty() || version.is_empty() {
+        let (package, version, sub_path) = parse_jsr_specifier(specifier)?;
+        let version_for_url = version.strip_prefix('^').unwrap_or(version);
+        if package.is_empty() || version_for_url.is_empty() {
             return None;
         }
-        let url = format!("https://jsr.io/{}/{}/mod.ts", package, version);
+        let version_req = parse_jsr_version_req(version);
+        if let Some(version_req) = version_req {
+            if let Some(resolved) =
+                self.resolve_jsr_match(&package, &version_req, sub_path.as_deref())
+            {
+                return Some(resolved);
+            }
+        }
+        let url = format!(
+            "https://jsr.io/{}/{}/{}",
+            package,
+            version_for_url,
+            default_jsr_entry(sub_path.as_deref())
+        );
         Url::parse(&url).ok()
+    }
+
+    fn resolve_jsr_match(
+        &self,
+        package: &str,
+        version_req: &VersionReq,
+        sub_path: Option<&str>,
+    ) -> Option<ModuleSpecifier> {
+        let mut best_match: Option<(Version, ModuleSpecifier)> = None;
+        for specifier in self.map.keys() {
+            let Some((entry_package, entry_version, entry_path)) =
+                parse_jsr_package_version(specifier)
+            else {
+                continue;
+            };
+            if entry_package != package {
+                continue;
+            }
+            if let Some(sub_path) = sub_path {
+                if !matches_jsr_subpath(&entry_path, sub_path) {
+                    continue;
+                }
+            } else if !entry_path.ends_with("/mod.ts") {
+                continue;
+            }
+            if !version_req.matches(&entry_version) {
+                continue;
+            }
+            let is_better = best_match
+                .as_ref()
+                .map(|(best_version, _)| entry_version > *best_version)
+                .unwrap_or(true);
+            if is_better {
+                best_match = Some((entry_version, specifier.clone()));
+            }
+        }
+        best_match.map(|(_, specifier)| specifier)
     }
 
     fn try_resolve_npm_specifier(&self, specifier: &str) -> Option<ModuleSpecifier> {
@@ -302,16 +352,24 @@ impl ModuleLoader {
     fn try_load_code_from_specifier(
         &self,
         specifier: &ModuleSpecifier,
+        module_type: ModuleType,
     ) -> Option<ModuleLoadResponse> {
         if let Some(code) = self.map.get(specifier) {
             return Some(ModuleLoadResponse::Sync(Ok(ModuleSource::new(
-                ModuleType::JavaScript,
+                module_type,
                 ModuleSourceCode::String(code.try_clone().unwrap()),
                 specifier,
                 None,
             ))));
         }
         None
+    }
+}
+
+fn to_module_type(requested_module_type: &RequestedModuleType) -> ModuleType {
+    match requested_module_type {
+        RequestedModuleType::Json => ModuleType::Json,
+        _ => ModuleType::JavaScript,
     }
 }
 
@@ -358,12 +416,19 @@ impl deno_core::ModuleLoader for ModuleLoader {
         &self,
         module_specifier: &ModuleSpecifier,
         _maybe_referrer: Option<&ModuleLoadReferrer>,
-        _options: ModuleLoadOptions,
+        options: ModuleLoadOptions,
     ) -> ModuleLoadResponse {
-        println!("loading {} {:?}", module_specifier, _maybe_referrer);
+        println!(
+            "loading {} {:?} {:?}",
+            module_specifier, _maybe_referrer, options.requested_module_type
+        );
+
+        let requested_module_type = options.requested_module_type.clone();
 
         // fast path
-        if let Some(res) = self.try_load_code_from_specifier(module_specifier) {
+        if let Some(res) = self
+            .try_load_code_from_specifier(module_specifier, to_module_type(&requested_module_type))
+        {
             return res;
         }
 
@@ -371,7 +436,7 @@ impl deno_core::ModuleLoader for ModuleLoader {
 
         let res = if let Some(code) = self.map.get(module_specifier) {
             Ok(ModuleSource::new(
-                ModuleType::JavaScript,
+                to_module_type(&requested_module_type),
                 ModuleSourceCode::String(code.try_clone().unwrap()),
                 module_specifier,
                 None,
@@ -380,7 +445,7 @@ impl deno_core::ModuleLoader for ModuleLoader {
             && let Some(code) = self.map.get(&resolved)
         {
             Ok(ModuleSource::new(
-                ModuleType::JavaScript,
+                to_module_type(&requested_module_type),
                 ModuleSourceCode::String(code.try_clone().unwrap()),
                 &resolved,
                 None,
@@ -389,7 +454,7 @@ impl deno_core::ModuleLoader for ModuleLoader {
             && let Some(code) = self.map.get(&resolved)
         {
             Ok(ModuleSource::new(
-                ModuleType::JavaScript,
+                to_module_type(&requested_module_type),
                 ModuleSourceCode::String(code.try_clone().unwrap()),
                 &resolved,
                 None,
@@ -448,6 +513,75 @@ fn normalize_package_json_entry(entry: &str) -> String {
 
 fn is_esm_entry(entry: &str) -> bool {
     entry.ends_with(".mjs") || entry.ends_with(".mts")
+}
+
+fn parse_jsr_version_req(version: &str) -> Option<VersionReq> {
+    if let Ok(req) = VersionReq::parse_from_npm(version) {
+        return Some(req);
+    }
+    let mut parts = version.split('.').collect::<Vec<_>>();
+    if parts.is_empty() || parts.len() > 2 {
+        return None;
+    }
+    while parts.len() < 2 {
+        parts.push("*");
+    }
+    let wildcard = format!("{}.{}.*", parts[0], parts[1]);
+    VersionReq::parse_from_npm(&wildcard).ok()
+}
+
+fn parse_jsr_specifier(specifier: &str) -> Option<(String, &str, Option<String>)> {
+    let (package, version_and_path) = specifier.rsplit_once('@')?;
+    let (version, sub_path) = match version_and_path.split_once('/') {
+        Some((version, sub_path)) => (version, Some(sub_path.to_string())),
+        None => (version_and_path, None),
+    };
+    if package.is_empty() || version.is_empty() {
+        return None;
+    }
+    Some((package.to_string(), version, sub_path))
+}
+
+fn parse_jsr_package_version(specifier: &ModuleSpecifier) -> Option<(String, Version, String)> {
+    if specifier.scheme() != "https" || specifier.domain() != Some("jsr.io") {
+        return None;
+    }
+    let segments = specifier.path_segments()?.collect::<Vec<_>>();
+    if segments.len() < 3 {
+        return None;
+    }
+    let (package, version_index) = if segments[0].starts_with('@') {
+        if segments.len() < 4 {
+            return None;
+        }
+        (format!("{}/{}", segments[0], segments[1]), 2)
+    } else {
+        (segments[0].to_string(), 1)
+    };
+    let version = Version::parse_standard(segments.get(version_index)?).ok()?;
+    Some((package, version, specifier.path().to_string()))
+}
+
+fn default_jsr_entry(sub_path: Option<&str>) -> String {
+    match sub_path {
+        Some(path) => normalize_jsr_subpath(path),
+        None => "mod.ts".to_string(),
+    }
+}
+
+fn matches_jsr_subpath(entry_path: &str, sub_path: &str) -> bool {
+    let sub_path = normalize_jsr_subpath(sub_path);
+    let suffix = format!("/{}", sub_path);
+    entry_path.ends_with(&suffix)
+}
+
+fn normalize_jsr_subpath(sub_path: &str) -> String {
+    let trimmed = sub_path.trim_start_matches('/');
+    if trimmed.contains('.') {
+        trimmed.to_string()
+    } else {
+        format!("{}.ts", trimmed)
+    }
 }
 
 fn is_bare_specifier(specifier: &str) -> bool {
