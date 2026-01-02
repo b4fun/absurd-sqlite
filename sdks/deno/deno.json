@@ -1,5 +1,5 @@
 {
-  "name": "@absurd-sqlite/sdk-deno",
+  "name": "@absurd-sqlite/sdk",
   "version": "0.1.0",
   "exports": "./mod.ts",
   "imports": {
