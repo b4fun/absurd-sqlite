@@ -9,6 +9,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "libc",
  "log",
  "rusqlite",
  "serde",

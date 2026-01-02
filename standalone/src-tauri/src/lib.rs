@@ -3,7 +3,7 @@ use tauri::{async_runtime, Manager};
 use tauri_plugin_cli::CliExt;
 
 use crate::dev_api::{load_dev_api_enabled, DevApiState};
-use crate::{db::DatabaseHandle, worker::spawn_worker};
+use crate::{db::DatabaseHandle, worker::load_worker_binary_path};
 
 mod db;
 mod db_commands;
@@ -48,7 +48,12 @@ pub fn run() {
             db_commands::apply_migrations_all,
             db_commands::apply_migration,
             dev_api::get_dev_api_status,
-            dev_api::set_dev_api_enabled
+            dev_api::set_dev_api_enabled,
+            worker::get_worker_status,
+            worker::get_worker_logs,
+            worker::set_worker_binary_path,
+            worker::start_worker,
+            worker::stop_worker
         ])
         .on_menu_event(|_app, _event| {
             // DevTools is only available in debug builds
@@ -79,11 +84,22 @@ pub fn run() {
 
             app_handle.manage(db_handle);
             app_handle.manage(DevApiState::new(enable_dev_api, None));
+            let worker_path = load_worker_binary_path(&app_handle);
+            app_handle.manage(worker::WorkerState::new(worker_path.clone()));
             if enable_dev_api {
                 let app_handle = app_handle.clone();
                 async_runtime::spawn(async move {
                     if let Err(err) = dev_api::ensure_running(&app_handle).await {
                         log::error!("Failed to start dev api server: {}", err);
+                    }
+                });
+            }
+
+            if worker_path.is_some() {
+                let app_handle = app_handle.clone();
+                async_runtime::spawn(async move {
+                    if let Err(err) = worker::start_worker_inner(&app_handle) {
+                        log::error!("Failed to start worker on launch: {}", err);
                     }
                 });
             }
@@ -108,8 +124,6 @@ pub fn run() {
                     .build()?;
                 app.set_menu(menu)?;
             }
-
-            async_runtime::spawn(async move { spawn_worker(&app_handle).await });
 
             log::info!("setup");
 

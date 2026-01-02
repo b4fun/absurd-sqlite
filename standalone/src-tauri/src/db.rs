@@ -110,6 +110,12 @@ impl DatabaseHandle {
     }
 }
 
+pub fn extension_path(app_handle: &AppHandle) -> Result<String> {
+    resolve_extension_path(app_handle)
+        .map(|path| path.to_string_lossy().to_string())
+        .ok_or_else(|| anyhow::anyhow!("SQLite extension not found"))
+}
+
 fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
     let lib_name = extension_lib_name();
     match app_handle.path().resource_dir() {
