@@ -1,5 +1,5 @@
-import { Database } from "jsr:@db/sqlite@0.13.0";
-import { Absurd, openDenoDatabase } from "../../../sdks/deno/mod.ts"
+import { Database } from "@db/sqlite";
+import { Absurd, openDenoDatabase } from "@absurd-sqlite/sdk";
 
 async function main() {
   console.log(Database);
@@ -42,15 +42,22 @@ function mustResolveUserModulePaths(): string[] {
   if (!rv) {
     return [];
   }
-  return rv.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  return rv
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 type UserModuleSetupFunction = (absurd: Absurd) => void;
 
-async function tryImportUserModule(userModulePath: string): Promise<UserModuleSetupFunction> {
+async function tryImportUserModule(
+  userModulePath: string
+): Promise<UserModuleSetupFunction> {
   const userModule = await import(userModulePath);
   if (typeof userModule !== "function") {
-    throw new Error(`User module at ${userModulePath} does not export a 'setup' function`);
+    throw new Error(
+      `User module at ${userModulePath} does not export a 'setup' function`
+    );
   }
 
   return userModule as UserModuleSetupFunction;

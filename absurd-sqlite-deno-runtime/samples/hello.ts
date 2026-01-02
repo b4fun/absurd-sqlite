@@ -1,4 +1,4 @@
-import { Absurd } from "../../sdks/deno/mod.ts";
+import { Absurd } from "@absurd-sqlite/sdk";
 
 export default function setup(absurd: Absurd) {
   absurd.registerTask(
@@ -22,6 +22,6 @@ export default function setup(absurd: Absurd) {
 
       console.log(`Saying hello to ${name}`);
       return { greeting: `Hello, ${name}!` };
-    },
+    }
   );
 }

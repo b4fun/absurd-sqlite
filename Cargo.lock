@@ -57,10 +57,12 @@ dependencies = [
  "deno_error",
  "deno_graph",
  "deno_npm",
+ "deno_semver",
  "eszip",
  "futures",
  "import_map",
  "reqwest 0.13.1",
+ "serde_json",
  "tokio",
  "url",
 ]
