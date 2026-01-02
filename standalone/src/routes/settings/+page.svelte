@@ -413,7 +413,12 @@
     </div>
     <div class="mt-4 grid gap-4 lg:grid-cols-[1fr_auto]">
       <label class="flex flex-col gap-2 text-sm font-medium text-slate-600">
-        Command
+        <span class="flex flex-wrap items-baseline gap-4">
+          <span>Command</span>
+          <span class="text-xs font-normal text-slate-400">
+            only configure worker commands that you trust to run on this machine.
+          </span>
+        </span>
         <input
           type="text"
           autocomplete="off"
