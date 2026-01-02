@@ -260,6 +260,7 @@ pub fn start_worker_inner(app_handle: &AppHandle) -> Result<WorkerStatus, String
         .spawn()
         .map_err(|err| err.to_string())?;
     let pid = child.pid();
+    log::info!("Worker started with pid {}", pid);
 
     *state.stop_requested.lock().unwrap() = false;
     *state.running.lock().unwrap() = Some(RunningWorker { pid, child });
@@ -279,18 +280,15 @@ pub fn start_worker_inner(app_handle: &AppHandle) -> Result<WorkerStatus, String
                     break;
                 }
                 CommandEvent::Error(err) => {
-                    log::warn!("Worker process error: {}", err);
                     push_worker_log(&app_handle, "stderr", err);
                 }
                 CommandEvent::Stderr(line) => {
                     if let Ok(message) = String::from_utf8(line) {
-                        log::info!("Worker stderr: {}", message.trim());
                         push_worker_log(&app_handle, "stderr", message);
                     }
                 }
                 CommandEvent::Stdout(line) => {
                     if let Ok(message) = String::from_utf8(line) {
-                        log::info!("Worker stdout: {}", message.trim());
                         push_worker_log(&app_handle, "stdout", message);
                     }
                 }
