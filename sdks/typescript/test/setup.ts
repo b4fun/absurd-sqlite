@@ -4,11 +4,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  Absurd as AbsurdBase,
-  type AbsurdHooks,
-  type JsonValue,
-} from "absurd-sdk";
+import { AbsurdBase, type AbsurdHooks, type JsonValue } from "../src/index.js";
 
 import { SqliteConnection } from "../src/sqlite";
 import type { Absurd, SQLiteDatabase } from "../src/index";

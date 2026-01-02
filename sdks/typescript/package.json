@@ -31,13 +31,11 @@
     "url": "https://github.com/b4fun/absurd-sqlite/issues"
   },
   "homepage": "https://github.com/b4fun/absurd-sqlite#readme",
-  "peerDependencies": {
-    "better-sqlite3": "^12.5.0"
-  },
   "dependencies": {
-    "absurd-sdk": "~0.0.7"
+    "@absurd-sqlite/sdk-types": "file:../typescript-types"
   },
   "devDependencies": {
+    "better-sqlite3": "^12.5.0",
     "@types/better-sqlite3": "^7.6.13",
     "typedoc": "^0.28.14",
     "typescript": "^5.9.3",

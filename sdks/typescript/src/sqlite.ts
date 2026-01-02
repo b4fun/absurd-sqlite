@@ -1,4 +1,4 @@
-import type { Queryable } from "./absurd-types";
+import type { Queryable } from "@absurd-sqlite/sdk-types";
 import type {
   SQLiteRestBindParams,
   SQLiteDatabase,
@@ -46,6 +46,7 @@ export class SqliteConnection implements Queryable {
 const namedParamPrefix = "p";
 
 function rewritePostgresQuery(text: string): string {
+  // TODO: drop postgres query rewrite once callers use SQLite-native SQL.
   return text
     .replace(/\$(\d+)/g, `:${namedParamPrefix}$1`)
     .replace(/absurd\.(\w+)/g, "absurd_$1");
@@ -98,6 +99,7 @@ function decodeColumnValue<V = any>(
   columnType: string | null,
   verbose?: SQLiteVerboseLog
 ): V | null {
+  // TODO: address type conversion issues with NULL/JSON detection across drivers.
   if (value === null || value === undefined) {
     return null;
   }

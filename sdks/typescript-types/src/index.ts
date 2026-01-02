@@ -100,16 +100,44 @@ interface Log {
   error(...args: any[]): void;
 }
 
+/**
+ * Hooks for customizing Absurd behavior.
+ *
+ * These hooks allow integration with tracing systems, correlation ID propagation,
+ * and other cross-cutting concerns.
+ */
+export interface AbsurdHooks {
+  /**
+   * Called before spawning a task. Can modify spawn options (including headers).
+   * Use this to inject trace IDs, correlation IDs, or other context from
+   * AsyncLocalStorage into the task.
+   */
+  beforeSpawn?: (
+    taskName: string,
+    params: JsonValue,
+    options: SpawnOptions
+  ) => SpawnOptions | Promise<SpawnOptions>;
+  /**
+   * Wraps task execution. Must call and return the result of execute().
+   * Use this to restore context (e.g., into AsyncLocalStorage) before the
+   * task handler runs, ensuring all code within the task has access to it.
+   */
+  wrapTaskExecution?: <T>(
+    ctx: TaskContext,
+    execute: () => Promise<T>
+  ) => Promise<T>;
+}
+
+export interface AbsurdOptions {
+  db: Queryable;
+  queueName?: string;
+  defaultMaxAttempts?: number;
+  log?: Log;
+  hooks?: AbsurdHooks;
+}
+
 export declare class TaskContext {
-  private readonly log;
   readonly taskID: string;
-  private readonly con;
-  private readonly queueName;
-  private readonly task;
-  private readonly checkpointCache;
-  private readonly claimTimeout;
-  private stepNameCounter;
-  private constructor();
   /**
    * Returns all headers attached to this task.
    */
@@ -122,7 +150,6 @@ export declare class TaskContext {
     task: ClaimedTask;
     claimTimeout: number;
   }): Promise<TaskContext>;
-  private queryWithCancelCheck;
   /**
    * Runs an idempotent step identified by name; caches and reuses its result across retries.
    * @param name Unique checkpoint name for this step.
@@ -141,10 +168,6 @@ export declare class TaskContext {
    * @param wakeAt Absolute time when the task should resume.
    */
   sleepUntil(stepName: string, wakeAt: Date): Promise<void>;
-  private getCheckpointName;
-  private lookupCheckpoint;
-  private persistCheckpoint;
-  private scheduleRun;
   /**
    * Waits for an event by name and returns its payload; optionally sets a custom step name and timeout (seconds).
    * @param eventName Event identifier to wait for.

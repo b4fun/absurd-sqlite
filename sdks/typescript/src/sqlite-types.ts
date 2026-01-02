@@ -1,10 +1,10 @@
-export type SQLiteBindValue = number | string | Buffer | bigint | Date | null;
+import type {
+  SQLiteBindParams,
+  SQLiteBindValue,
+  SQLiteRestBindParams,
+} from "@absurd-sqlite/sdk-types";
 
-export type SQLiteBindParams =
-  | SQLiteBindValue[]
-  | Record<string, SQLiteBindValue>;
-
-export type SQLiteRestBindParams = SQLiteBindValue[] | [SQLiteBindParams];
+export type { SQLiteBindParams, SQLiteBindValue, SQLiteRestBindParams };
 
 export interface SQLiteColumnDefinition {
   name: string;
