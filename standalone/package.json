@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "build:tauri": "vite build && cargo build -p absurd_sqlite_extension --release",
+    "build:tauri": "vite build && cargo build -p absurd-sqlite-extension --release",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",

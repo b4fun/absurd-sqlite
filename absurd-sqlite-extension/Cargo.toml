@@ -1,7 +1,7 @@
 [package]
 build = "build.rs"
 edition = "2021"
-name = "absurd_sqlite_extension"
+name = "absurd-sqlite-extension"
 version = "0.1.0"
 
 [lib]

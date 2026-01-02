@@ -7,7 +7,7 @@
     "build": "tsc --project tsconfig.build.json && tsc --project tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
     "type-check": "tsc --noEmit",
     "prepare": "npm run build",
-    "test:prepare": "cd ../../ && cargo build -p absurd_sqlite_extension --release",
+    "test:prepare": "cd ../../ && cargo build -p absurd-sqlite-extension --release",
     "test": "npm run test:prepare && vitest --silent --run",
     "test:watch": "npm run test:prepare && vitest",
     "test:ui": "npm run test:prepare && vitest --ui",

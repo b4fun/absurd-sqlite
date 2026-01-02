@@ -24,7 +24,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build extension
-        run: cargo build --release -p absurd_sqlite_extension
+        run: cargo build --release -p absurd-sqlite-extension
 
       - name: Package artifact
         shell: bash

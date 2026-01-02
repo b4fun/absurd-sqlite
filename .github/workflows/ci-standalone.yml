@@ -26,8 +26,8 @@ jobs:
 
       - name: Build SQLite extension
         run: |
-          cargo build -p absurd_sqlite_extension --release
-          cargo build -p absurd_sqlite_extension
+          cargo build -p absurd-sqlite-extension --release
+          cargo build -p absurd-sqlite-extension
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
