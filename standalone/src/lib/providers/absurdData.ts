@@ -93,6 +93,13 @@ export type SettingsInfo = {
   migration: MigrationStatus;
 };
 
+export type WorkerStatus = {
+  configuredPath: string | null;
+  running: boolean;
+  pid: number | null;
+  crashing: boolean;
+};
+
 export type MigrationEntry = {
   id: number;
   introducedVersion: string;
@@ -116,6 +123,10 @@ export type AbsurdDataProvider = {
   getEvents: () => Promise<EventEntry[]>;
   getFilteredEvents: (filters: { queueName?: string; eventName?: string }) => Promise<EventEntry[]>;
   getSettingsInfo: () => Promise<SettingsInfo>;
+  getWorkerStatus: () => Promise<WorkerStatus>;
+  setWorkerBinaryPath: (path: string) => Promise<WorkerStatus>;
+  startWorker: () => Promise<WorkerStatus>;
+  stopWorker: () => Promise<WorkerStatus>;
   getMigrations: () => Promise<MigrationEntry[]>;
   applyMigrationsAll: () => Promise<number>;
   applyMigration: (migrationId: number) => Promise<number>;
@@ -148,6 +159,10 @@ export const tauriAbsurdProvider: AbsurdDataProvider = {
   getEvents: () => tauriInvoke("get_events"),
   getFilteredEvents: (filters) => tauriInvoke("get_filtered_events", { filters }),
   getSettingsInfo: () => tauriInvoke("get_settings_info"),
+  getWorkerStatus: () => tauriInvoke("get_worker_status"),
+  setWorkerBinaryPath: (path) => tauriInvoke("set_worker_binary_path", { path }),
+  startWorker: () => tauriInvoke("start_worker"),
+  stopWorker: () => tauriInvoke("stop_worker"),
   getMigrations: () => tauriInvoke("get_migrations"),
   applyMigrationsAll: () => tauriInvoke("apply_migrations_all"),
   applyMigration: (migrationId) =>
@@ -168,6 +183,13 @@ const mockMigrations: MigrationEntry[] = [
     status: "pending",
   },
 ];
+
+let mockWorkerStatus: WorkerStatus = {
+  configuredPath: "/usr/local/bin/absurd-worker",
+  running: false,
+  pid: null,
+  crashing: false,
+};
 
 const DEV_API_PORT_BASE = 11223;
 const DEV_API_PORT_ATTEMPTS = 10;
@@ -308,6 +330,10 @@ const trpcAbsurdProvider: AbsurdDataProvider = {
   getEvents: () => trpcQuery("getEvents"),
   getFilteredEvents: (filters) => trpcQuery("getFilteredEvents", filters),
   getSettingsInfo: () => trpcQuery("getSettingsInfo"),
+  getWorkerStatus: () => trpcQuery("getWorkerStatus"),
+  setWorkerBinaryPath: (path) => trpcMutation("setWorkerBinaryPath", { path }),
+  startWorker: () => trpcMutation("startWorker"),
+  stopWorker: () => trpcMutation("stopWorker"),
   getMigrations: () => trpcQuery("getMigrations"),
   applyMigrationsAll: () => trpcMutation("applyMigrationsAll"),
   applyMigration: (migrationId) =>
@@ -606,6 +632,33 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
       latestAppliedAt: "Dec 27, 2025, 2:48 PM",
     },
   }),
+  getWorkerStatus: async () => ({ ...mockWorkerStatus }),
+  setWorkerBinaryPath: async (path: string) => {
+    mockWorkerStatus = {
+      ...mockWorkerStatus,
+      configuredPath: path.trim().length > 0 ? path.trim() : null,
+    };
+    return { ...mockWorkerStatus };
+  },
+  startWorker: async () => {
+    if (mockWorkerStatus.configuredPath) {
+      mockWorkerStatus = {
+        ...mockWorkerStatus,
+        running: true,
+        pid: Math.floor(Math.random() * 40000) + 1000,
+        crashing: false,
+      };
+    }
+    return { ...mockWorkerStatus };
+  },
+  stopWorker: async () => {
+    mockWorkerStatus = {
+      ...mockWorkerStatus,
+      running: false,
+      pid: null,
+    };
+    return { ...mockWorkerStatus };
+  },
   getMigrations: async () => mockMigrations.map((entry) => ({ ...entry })),
   applyMigrationsAll: async () => {
     let applied = 0;

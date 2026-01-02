@@ -6,6 +6,7 @@
     isTauriRuntime,
     type MigrationEntry,
     type SettingsInfo,
+    type WorkerStatus,
   } from "$lib/providers/absurdData";
   import { invoke } from "@tauri-apps/api/core";
 
@@ -25,6 +26,11 @@
   let settings = $state<SettingsInfo | null>(null);
   let migrations = $state<MigrationEntry[]>([]);
   let devApiStatus = $state<DevApiStatus | null>(null);
+  let workerStatus = $state<WorkerStatus | null>(null);
+  let workerPathDraft = $state("");
+  let workerPathTouched = $state(false);
+  let workerError = $state<string | null>(null);
+  let workerAction = $state<"idle" | "saving" | "starting" | "stopping">("idle");
   const data = $derived(settings ?? defaults);
   const statusLabel = $derived(
     data.migration.status === "applied" ? "Up to date" : "Not applied",
@@ -42,10 +48,62 @@
   );
   let copyStatus = $state<"idle" | "copied" | "error">("idle");
   const showDevApi = $derived(isTauriRuntime());
+  const normalizedWorkerPath = $derived(workerPathDraft.trim());
+  const workerReady = $derived(workerStatus !== null);
+  const workerPathDirty = $derived(
+    workerStatus ? (workerStatus.configuredPath ?? "") !== normalizedWorkerPath : false,
+  );
+  const workerPathConfigured = $derived(normalizedWorkerPath.length > 0);
+  const workerStatusLabel = $derived.by(() => {
+    if (!workerStatus) {
+      return "Loading...";
+    }
+    if (workerStatus.crashing) {
+      if (workerStatus.running && workerStatus.pid) {
+        return `Crashing (PID ${workerStatus.pid})`;
+      }
+      return "Crashing";
+    }
+    if (workerStatus.running && workerStatus.pid) {
+      return `Running (PID ${workerStatus.pid})`;
+    }
+    if (!workerStatus.configuredPath) {
+      return "Not configured";
+    }
+    return "Stopped";
+  });
+  const workerStatusClasses = $derived.by(() => {
+    if (!workerStatus) {
+      return "bg-slate-100 text-slate-600";
+    }
+    if (workerStatus.crashing) {
+      return "bg-rose-100 text-rose-700";
+    }
+    if (workerStatus.running) {
+      return "bg-emerald-100 text-emerald-700";
+    }
+    return "bg-slate-100 text-slate-600";
+  });
+  const workerIndicatorClasses = $derived.by(() => {
+    if (!workerStatus) {
+      return "bg-slate-300";
+    }
+    if (workerStatus.crashing) {
+      return "bg-rose-500";
+    }
+    if (workerStatus.running) {
+      return "bg-emerald-500";
+    }
+    return "bg-slate-400";
+  });
 
   const refreshData = async () => {
     settings = await provider.getSettingsInfo();
     migrations = await provider.getMigrations();
+    workerStatus = await provider.getWorkerStatus();
+    if (workerStatus && !workerPathTouched) {
+      workerPathDraft = workerStatus.configuredPath ?? "";
+    }
     if (showDevApi) {
       devApiStatus = await invoke<DevApiStatus>("get_dev_api_status");
     }
@@ -80,6 +138,81 @@
     setTimeout(() => {
       copyStatus = "idle";
     }, 2000);
+  };
+
+  const syncWorkerStatus = (status: WorkerStatus) => {
+    workerStatus = status;
+    if (!workerPathTouched) {
+      workerPathDraft = status.configuredPath ?? "";
+    }
+  };
+
+  const handleSaveWorkerPath = async () => {
+    workerError = null;
+    workerAction = "saving";
+    try {
+      const status = await provider.setWorkerBinaryPath(normalizedWorkerPath);
+      workerPathTouched = false;
+      syncWorkerStatus(status);
+    } catch (error) {
+      workerError =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Failed to save worker path.";
+    } finally {
+      workerAction = "idle";
+    }
+  };
+
+  const handleStartWorker = async () => {
+    workerError = null;
+    workerAction = "starting";
+    try {
+      if (workerPathDirty) {
+        const updated = await provider.setWorkerBinaryPath(normalizedWorkerPath);
+        workerPathTouched = false;
+        syncWorkerStatus(updated);
+      }
+      const status = await provider.startWorker();
+      syncWorkerStatus(status);
+    } catch (error) {
+      workerError =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Failed to start worker.";
+    } finally {
+      workerAction = "idle";
+    }
+  };
+
+  const handleStopWorker = async () => {
+    workerError = null;
+    workerAction = "stopping";
+    try {
+      const status = await provider.stopWorker();
+      syncWorkerStatus(status);
+    } catch (error) {
+      workerError =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Failed to stop worker.";
+    } finally {
+      workerAction = "idle";
+    }
+  };
+
+  const handleToggleWorker = async () => {
+    if (workerStatus?.running) {
+      await handleStopWorker();
+    } else {
+      await handleStartWorker();
+    }
   };
 
   onMount(() => {
@@ -160,6 +293,66 @@
         </dd>
       </div>
     </dl>
+  </article>
+
+  <article class="rounded-lg border border-black/10 bg-white p-6 col-span-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-2xl font-semibold text-slate-900">Worker</h2>
+        <p class="mt-1 text-sm text-slate-500">
+          Run a local worker process for this database.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <span class={`h-2.5 w-2.5 rounded-full ${workerIndicatorClasses}`}></span>
+        <span class={`rounded-full px-3 py-1 text-xs font-semibold ${workerStatusClasses}`}>
+          {workerStatusLabel}
+        </span>
+        <Button
+          type="button"
+          class={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+            workerStatus?.running
+              ? "border border-rose-200 bg-rose-50 text-rose-700"
+              : "border border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+          onclick={handleToggleWorker}
+          disabled={!workerReady || !workerPathConfigured || workerAction !== "idle"}
+        >
+          {workerStatus?.running ? "Stop" : "Start"}
+        </Button>
+      </div>
+    </div>
+    <div class="mt-4 grid gap-4 lg:grid-cols-[1fr_auto]">
+      <label class="flex flex-col gap-2 text-sm font-medium text-slate-600">
+        Command
+        <input
+          type="text"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          class="w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm text-slate-700"
+          placeholder="npx absurd-worker"
+          bind:value={workerPathDraft}
+          oninput={() => {
+            workerPathTouched = true;
+          }}
+        />
+      </label>
+      <div class="flex flex-wrap items-end gap-2">
+        <Button
+          type="button"
+          class="rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+          onclick={handleSaveWorkerPath}
+          disabled={!workerReady || !workerPathDirty || workerAction !== "idle"}
+        >
+          Save
+        </Button>
+      </div>
+    </div>
+    {#if workerError}
+      <p class="mt-3 text-sm text-rose-600">{workerError}</p>
+    {/if}
   </article>
 
   <article class="rounded-lg border border-black/10 bg-white p-6 col-span-2">

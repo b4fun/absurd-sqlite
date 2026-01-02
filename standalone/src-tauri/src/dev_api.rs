@@ -14,6 +14,7 @@ use tower_http::cors::CorsLayer;
 
 use crate::db::DatabaseHandle;
 use crate::db_commands::{EventFilters, TaskRunFilters, TauriDataProvider};
+use crate::worker;
 
 const DEV_API_PORT_DEFAULT: u16 = 11223;
 const DEV_API_PORT_ATTEMPTS: u16 = 10;
@@ -37,6 +38,12 @@ struct TrpcRequest {
 struct TrpcQuery {
     input: Option<String>,
     json: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkerPathInput {
+    path: String,
 }
 
 #[derive(Serialize)]
@@ -399,6 +406,23 @@ fn handle_procedure(
                 let info = provider.get_settings_info(db_path)?;
                 Ok(serde_json::to_value(info)?)
             })
+        }
+        "getWorkerStatus" => {
+            let status = worker::get_worker_status_inner(app_handle)?;
+            Ok(serde_json::to_value(status).map_err(|err| err.to_string())?)
+        }
+        "setWorkerBinaryPath" => {
+            let payload: WorkerPathInput = parse_input(input)?;
+            let status = worker::set_worker_binary_path_inner(app_handle, &payload.path)?;
+            Ok(serde_json::to_value(status).map_err(|err| err.to_string())?)
+        }
+        "startWorker" => {
+            let status = worker::start_worker_inner(app_handle)?;
+            Ok(serde_json::to_value(status).map_err(|err| err.to_string())?)
+        }
+        "stopWorker" => {
+            let status = worker::stop_worker_inner(app_handle)?;
+            Ok(serde_json::to_value(status).map_err(|err| err.to_string())?)
         }
         "getMigrations" => with_provider(app_handle, |provider| {
             let migrations = provider.get_migrations()?;
