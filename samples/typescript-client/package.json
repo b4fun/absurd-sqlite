@@ -2,9 +2,12 @@
   "name": "@absurd-sqlite-samples/typescript-client",
   "version": "0.1.0",
   "main": "index.js",
+  "bin": {
+    "absurd-sqlite-sample": "dist/absurd-sqlite-sample.js"
+  },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --outfile=dist/bundle.js --platform=node --external:better-sqlite3",
-    "start": "node dist/bundle.js",
+    "build": "esbuild src/index.ts --bundle --outfile=dist/absurd-sqlite-sample.js --platform=node --external:better-sqlite3 --banner:js='#!/usr/bin/env node'",
+    "start": "node dist/absurd-sqlite-sample.js",
     "type-check": "tsc --noEmit"
   },
   "author": "",

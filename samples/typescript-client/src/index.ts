@@ -1,22 +1,14 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { Absurd, SQLiteDatabase } from "@absurd-sqlite/sdk";
 import sqlite from "better-sqlite3";
 
 async function main() {
-  const extensionPath = "../../target/release/libabsurd.dylib";
-  const bundleId = "ing.isbuild.absurd-sqlite-standalone";
-  const appLocalDir =
-    process.env.APP_LOCAL_DIR ??
-    (process.platform === "darwin"
-      ? join(homedir(), "Library", "Application Support", bundleId)
-      : process.platform === "win32"
-      ? join(
-          process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"),
-          bundleId
-        )
-      : join(homedir(), ".local", "share", bundleId));
-  const dbPath = join(appLocalDir, "absurd-sqlite.db");
+  const extensionPath = process.env.ABSURD_DATABASE_EXTENSION_PATH;
+  const dbPath = process.env.ABSURD_DATABASE_PATH;
+  if (!extensionPath || !dbPath) {
+    throw new Error(
+      "ABSURD_DATABASE_EXTENSION_PATH and ABSURD_DATABASE_PATH must be set",
+    );
+  }
   const db = sqlite(dbPath) as unknown as SQLiteDatabase;
 
   const absurd = new Absurd(db, extensionPath);
