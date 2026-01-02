@@ -1,5 +1,5 @@
 [workspace]
-members = ["absurd-sqlite-deno-runtime", "absurd-sqlite-extension", "standalone/src-tauri"]
+members = ["absurd-sqlite-deno-builder","absurd-sqlite-deno-runtime", "absurd-sqlite-extension", "standalone/src-tauri"]
 resolver = "3"
 
 [profile.release]

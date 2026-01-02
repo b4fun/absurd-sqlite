@@ -1,0 +1,16 @@
+[package]
+name = "absurd_sqlite_deno_builder"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+deno_ast = "0.52.0"
+deno_core = "0.376.0"
+deno_error = "0.7.3"
+deno_graph = "0.105.0"
+eszip = "0.106.0"
+futures = "0.3.31"
+import_map = "0.24.0"
+reqwest = "0.13.1"
+url = "2.5.7"
