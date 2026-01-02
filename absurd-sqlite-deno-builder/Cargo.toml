@@ -5,12 +5,17 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
+async-trait = "0.1.89"
 deno_ast = "0.52.0"
 deno_core = "0.376.0"
 deno_error = "0.7.3"
 deno_graph = "0.105.0"
+deno_npm = "0.42.2"
+deno_semver = "0.9.1"
 eszip = "0.106.0"
+flate2 = "1.0.35"
 futures = "0.3.31"
 import_map = "0.24.0"
-reqwest = "0.13.1"
+reqwest = { version = "0.13.1", features = ["json"] }
+tar = "0.4.44"
 url = "2.5.7"
