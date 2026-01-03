@@ -34,10 +34,7 @@
 </script>
 
 <div class="min-h-screen text-slate-900">
-  <header
-    class="sticky top-0 z-20 border-b border-black/10 bg-white transition-all duration-200"
-    class:header-compact={isCompact}
-  >
+  <header class="sticky top-0 z-20 border-b border-black/10 bg-white transition-all duration-200" class:header-compact={isCompact}>
     <div class="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-8 py-4 transition-all duration-200 header-inner">
       <div class="flex items-center gap-2 text-base font-semibold text-slate-900 header-logo select-none">
         <img src="/logo.png" alt="Absurd SQLite logo" class="h-8 w-8 header-logo-icon" />
@@ -63,7 +60,7 @@
     </div>
   </header>
 
-  <main class="mx-auto w-full max-w-screen-2xl px-8 py-8 pb-20">
+  <main class="mx-auto w-full max-w-screen-2xl px-8 py-8 pb-20 content-body">
     {@render children?.()}
   </main>
 </div>
@@ -87,5 +84,13 @@
 
   .header-logo {
     transition: none;
+  }
+
+  .content-body {
+    padding-bottom: var(--app-header-height, 4rem);
+  }
+
+  :global(:root) {
+    --app-header-height: 4rem;
   }
 </style>
