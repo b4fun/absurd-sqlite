@@ -3,11 +3,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::VecDeque;
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_store::StoreExt;
+use tokio::time::sleep;
 
 use crate::db::{extension_path, DatabaseHandle};
 
@@ -15,6 +16,8 @@ const WORKER_STORE_PATH: &str = "worker.json";
 const WORKER_PATH_KEY: &str = "worker_binary_path";
 const CRASH_WINDOW_MS: i64 = 60_000;
 const CRASH_THRESHOLD: usize = 3;
+const RESTART_BASE_DELAY_MS: i64 = 1_000;
+const RESTART_MAX_DELAY_MS: i64 = 10_000;
 const LOG_BUFFER_LIMIT: usize = 500;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +65,11 @@ impl CrashTracker {
     fn record_exit(&mut self, now_ms: i64) {
         self.history.push_back(now_ms);
         self.prune(now_ms);
+    }
+
+    fn recent_count(&mut self, now_ms: i64) -> usize {
+        self.prune(now_ms);
+        self.history.len()
     }
 
     fn is_crashing(&mut self, now_ms: i64) -> bool {
@@ -359,10 +367,65 @@ fn handle_worker_exit(app_handle: &AppHandle) {
 
     *state.running.lock().unwrap() = None;
 
-    if !stopped {
-        let mut tracker = state.crash_tracker.lock().unwrap();
-        tracker.record_exit(current_time_ms());
+    if stopped {
+        return;
     }
+
+    let (should_restart, delay_ms, recent_count) = {
+        let mut tracker = state.crash_tracker.lock().unwrap();
+        let now_ms = current_time_ms();
+        tracker.record_exit(now_ms);
+        let recent = tracker.recent_count(now_ms);
+        let delay_ms = (RESTART_BASE_DELAY_MS * recent as i64).min(RESTART_MAX_DELAY_MS);
+        (!tracker.is_crashing(now_ms), delay_ms, recent)
+    };
+
+    if !should_restart {
+        push_worker_log(
+            app_handle,
+            "stderr",
+            format!(
+                "Worker crashed {} times in the last minute; auto-restart paused.",
+                recent_count
+            ),
+        );
+        return;
+    }
+
+    if state.binary_path.lock().unwrap().is_none() {
+        return;
+    }
+
+    push_worker_log(
+        app_handle,
+        "stdout",
+        format!(
+            "Worker crashed; restarting in {}s.",
+            (delay_ms as f32 / 1000.0).ceil() as i64
+        ),
+    );
+
+    let app_handle = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        sleep(Duration::from_millis(delay_ms as u64)).await;
+        let state = app_handle.state::<WorkerState>();
+        if *state.stop_requested.lock().unwrap() {
+            return;
+        }
+        if state.running.lock().unwrap().is_some() {
+            return;
+        }
+        if state.binary_path.lock().unwrap().is_none() {
+            return;
+        }
+        if let Err(err) = start_worker_inner(&app_handle) {
+            push_worker_log(
+                &app_handle,
+                "stderr",
+                format!("Failed to restart worker: {}", err),
+            );
+        }
+    });
 }
 
 fn parse_command(command: &str) -> Result<(String, Vec<String>), String> {

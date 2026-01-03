@@ -39,6 +39,7 @@ pub fn run() {
             db_commands::get_queue_names,
             db_commands::get_queue_summaries,
             db_commands::create_queue,
+            db_commands::cleanup_queue,
             db_commands::get_task_name_options,
             db_commands::get_event_filter_defaults,
             db_commands::get_events,

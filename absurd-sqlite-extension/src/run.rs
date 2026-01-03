@@ -602,71 +602,35 @@ pub fn absurd_cleanup_tasks(
     sql::exec_with_bind_text(db, "begin immediate", &[])?;
 
     let deleted = (|| -> Result<i64> {
-        let mut select_stmt = sqlite_loadable::exec::Statement::prepare(
+        sql::exec_with_bind_text(
             db,
-            "select task_id
-               from (
-                 select t.task_id as task_id,
-                        case
-                          when t.state = 'completed' then r.completed_at
-                          when t.state = 'failed' then r.failed_at
-                          when t.state = 'cancelled' then t.cancelled_at
-                          else null
-                        end as terminal_at
-                   from absurd_tasks t
-                   left join absurd_runs r
-                     on r.queue_name = t.queue_name
-                    and r.run_id = t.last_attempt_run
-                  where t.queue_name = ?1
-                    and t.state in ('completed','failed','cancelled')
-               )
-              where terminal_at is not null
-                and terminal_at < cast(?2 as integer)
-              order by terminal_at
-              limit cast(?3 as integer)",
-        )
-        .map_err(|err| {
-            Error::new_message(format!("failed to prepare cleanup_tasks select: {:?}", err))
-        })?;
-        select_stmt
-            .bind_text(1, queue_name)
-            .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
-        select_stmt
-            .bind_text(2, &cutoff_value)
-            .map_err(|err| Error::new_message(format!("failed to bind cutoff: {:?}", err)))?;
-        select_stmt
-            .bind_text(3, &limit_value)
-            .map_err(|err| Error::new_message(format!("failed to bind limit: {:?}", err)))?;
+            "delete from absurd_tasks
+              where rowid in (
+                select rowid
+                  from (
+                    select t.rowid as rowid,
+                           case
+                             when t.state = 'completed' then r.completed_at
+                             when t.state = 'failed' then r.failed_at
+                             when t.state = 'cancelled' then t.cancelled_at
+                             else null
+                           end as terminal_at
+                      from absurd_tasks t
+                      left join absurd_runs r
+                        on r.queue_name = t.queue_name
+                       and r.run_id = t.last_attempt_run
+                     where t.queue_name = ?1
+                       and t.state in ('completed','failed','cancelled')
+                  )
+                 where terminal_at is not null
+                   and terminal_at < cast(?2 as integer)
+                 order by terminal_at
+                 limit cast(?3 as integer)
+              )",
+            &[queue_name, &cutoff_value, &limit_value],
+        )?;
 
-        let mut task_ids = Vec::new();
-        for row in select_stmt.execute() {
-            let row = row
-                .map_err(|err| Error::new_message(format!("failed to read task row: {:?}", err)))?;
-            let task_id = row
-                .get::<String>(0)
-                .map_err(|err| Error::new_message(format!("failed to read task_id: {:?}", err)))?;
-            task_ids.push(task_id);
-        }
-        drop(select_stmt);
-
-        if task_ids.is_empty() {
-            return Ok(0);
-        }
-
-        let mut deleted_count = 0;
-        for task_id in task_ids {
-            sql::exec_with_bind_text(
-                db,
-                "delete from absurd_tasks where queue_name = ?1 and task_id = ?2",
-                &[queue_name, &task_id],
-            )?;
-            let changes = sql::query_row_i64(db, "select changes()", &[])?;
-            if changes > 0 {
-                deleted_count += 1;
-            }
-        }
-
-        Ok(deleted_count)
+        sql::query_row_i64(db, "select changes()", &[])
     })();
 
     let deleted = match deleted {
@@ -702,52 +666,21 @@ pub fn absurd_cleanup_events(
     sql::exec_with_bind_text(db, "begin immediate", &[])?;
 
     let deleted = (|| -> Result<i64> {
-        let mut select_stmt = sqlite_loadable::exec::Statement::prepare(
+        sql::exec_with_bind_text(
             db,
-            "select event_name
-               from absurd_events
-              where queue_name = ?1
-                and emitted_at < cast(?2 as integer)
-              order by emitted_at
-              limit cast(?3 as integer)",
-        )
-        .map_err(|err| {
-            Error::new_message(format!(
-                "failed to prepare cleanup_events select: {:?}",
-                err
-            ))
-        })?;
-        select_stmt
-            .bind_text(1, queue_name)
-            .map_err(|err| Error::new_message(format!("failed to bind queue_name: {:?}", err)))?;
-        select_stmt
-            .bind_text(2, &cutoff_value)
-            .map_err(|err| Error::new_message(format!("failed to bind cutoff: {:?}", err)))?;
-        select_stmt
-            .bind_text(3, &limit_value)
-            .map_err(|err| Error::new_message(format!("failed to bind limit: {:?}", err)))?;
+            "delete from absurd_events
+              where rowid in (
+                select rowid
+                  from absurd_events
+                 where queue_name = ?1
+                   and emitted_at < cast(?2 as integer)
+                 order by emitted_at
+                 limit cast(?3 as integer)
+              )",
+            &[queue_name, &cutoff_value, &limit_value],
+        )?;
 
-        let mut deleted_count = 0;
-        for row in select_stmt.execute() {
-            let row = row.map_err(|err| {
-                Error::new_message(format!("failed to read event row: {:?}", err))
-            })?;
-            let event_name = row.get::<String>(0).map_err(|err| {
-                Error::new_message(format!("failed to read event_name: {:?}", err))
-            })?;
-            sql::exec_with_bind_text(
-                db,
-                "delete from absurd_events where queue_name = ?1 and event_name = ?2",
-                &[queue_name, &event_name],
-            )?;
-            let changes = sql::query_row_i64(db, "select changes()", &[])?;
-            if changes > 0 {
-                deleted_count += 1;
-            }
-        }
-        drop(select_stmt);
-
-        Ok(deleted_count)
+        sql::query_row_i64(db, "select changes()", &[])
     })();
 
     let deleted = match deleted {

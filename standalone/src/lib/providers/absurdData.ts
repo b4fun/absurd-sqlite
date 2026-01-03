@@ -79,6 +79,18 @@ export type EventEntry = {
   payloadPreview: string;
 };
 
+export type CleanupTarget = "tasks" | "events";
+
+export type CleanupQueueOptions = {
+  queueName: string;
+  target: CleanupTarget;
+  ttlSeconds: number;
+};
+
+export type CleanupResult = {
+  deletedCount: number;
+};
+
 export type MigrationStatus = {
   status: "applied" | "missing";
   appliedCount: number;
@@ -130,6 +142,7 @@ export type AbsurdDataProvider = {
   getTaskNameOptions: (queueName?: string) => Promise<string[]>;
   getQueueSummaries: () => Promise<QueueSummary[]>;
   createQueue: (queueName: string) => Promise<void>;
+  cleanupQueue: (options: CleanupQueueOptions) => Promise<CleanupResult>;
   getEventFilterDefaults: (queueName?: string) => Promise<EventFilterDefaults>;
   getEvents: () => Promise<EventEntry[]>;
   getFilteredEvents: (filters: { queueName?: string; eventName?: string }) => Promise<EventEntry[]>;
@@ -166,6 +179,7 @@ export const tauriAbsurdProvider: AbsurdDataProvider = {
     tauriInvoke("get_task_name_options", { queue_name: queueName ?? null }),
   getQueueSummaries: () => tauriInvoke("get_queue_summaries"),
   createQueue: (queueName) => tauriInvoke("create_queue", { queueName }),
+  cleanupQueue: (options) => tauriInvoke("cleanup_queue", { options }),
   getEventFilterDefaults: (queueName) =>
     tauriInvoke("get_event_filter_defaults", queueName ? { queue_name: queueName } : undefined),
   getEvents: () => tauriInvoke("get_events"),
@@ -344,6 +358,7 @@ const trpcAbsurdProvider: AbsurdDataProvider = {
     trpcQuery("getTaskNameOptions", queueName ? { queueName } : null),
   getQueueSummaries: () => trpcQuery("getQueueSummaries"),
   createQueue: (queueName) => trpcMutation("createQueue", { queueName }),
+  cleanupQueue: (options) => trpcMutation("cleanupQueue", options),
   getEventFilterDefaults: (queueName) =>
     trpcQuery("getEventFilterDefaults", queueName ? { queueName } : null),
   getEvents: () => trpcQuery("getEvents"),
@@ -374,6 +389,7 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
     return [...new Set(filtered.map((run) => run.name))].sort();
   },
   createQueue: async () => {},
+  cleanupQueue: async () => ({ deletedCount: 0 }),
   getOverviewMetrics: async () => ({
     activeQueues: 1,
     messagesProcessed: 0,
