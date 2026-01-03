@@ -66,6 +66,25 @@ pub fn run() {
                     window.open_devtools();
                 }
             }
+            if let Some(index) = _event
+                .id()
+                .as_ref()
+                .strip_prefix("tasks_processed_recent_")
+                .and_then(|value| value.parse::<usize>().ok())
+            {
+                if let Some(task_id) = ui::tray::recent_task_id(_app, index) {
+                    if let Some(window) = _app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        let script = format!(
+                            "window.location.assign({});",
+                            serde_json::to_string(&format!("/tasks/{}", task_id))
+                                .unwrap_or_else(|_| "\"/tasks\"".to_string())
+                        );
+                        let _ = window.eval(&script);
+                    }
+                }
+            }
             if _event.id() == ui::tray::TRAY_SHOW_ID {
                 if let Some(window) = _app.get_webview_window("main") {
                     let _ = window.show();

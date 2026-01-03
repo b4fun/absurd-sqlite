@@ -25,6 +25,7 @@ struct TrayMenuState {
     worker_item: MenuItem<Wry>,
     worker_separator: PredefinedMenuItem<Wry>,
     worker_visible: Mutex<bool>,
+    recent_task_ids: Mutex<Vec<Option<String>>>,
 }
 
 pub fn setup(app: &tauri::App) -> Result<()> {
@@ -46,13 +47,15 @@ pub fn setup(app: &tauri::App) -> Result<()> {
     )?;
     let mut recent_items = Vec::with_capacity(MAX_RECENT_TASKS);
     for idx in 0..MAX_RECENT_TASKS {
-        recent_items.push(MenuItem::with_id(
+        let item = MenuItem::with_id(
             app_handle,
             format!("tasks_processed_recent_{}", idx),
             "--",
             false,
             None::<&str>,
-        )?);
+        )?;
+        item.set_enabled(false)?;
+        recent_items.push(item);
     }
     let recent_separator = PredefinedMenuItem::separator(app_handle)?;
     let worker_label = worker_status_label(app_handle);
@@ -98,6 +101,7 @@ pub fn setup(app: &tauri::App) -> Result<()> {
         worker_item,
         worker_separator,
         worker_visible: Mutex::new(worker_label.is_some()),
+        recent_task_ids: Mutex::new(vec![None; MAX_RECENT_TASKS]),
     });
 
     Ok(())
@@ -119,20 +123,37 @@ pub fn refresh_now(app_handle: &AppHandle) -> Result<()> {
     update_menu_state(app_handle)
 }
 
+pub fn recent_task_id(app_handle: &AppHandle, index: usize) -> Option<String> {
+    let state = app_handle.state::<TrayMenuState>();
+    let ids = state.recent_task_ids.lock().unwrap();
+    ids.get(index).and_then(|id| id.clone())
+}
+
 fn update_menu_state(app_handle: &AppHandle) -> Result<()> {
     let state = app_handle.state::<TrayMenuState>();
     let tasks_label = tasks_last_hour_label(app_handle);
     state.tasks_item.set_text(tasks_label)?;
 
     let recent = fetch_recent_tasks(app_handle)?;
+    {
+        let mut ids = state.recent_task_ids.lock().unwrap();
+        ids.clear();
+        for entry in &recent {
+            ids.push(Some(entry.0.clone()));
+        }
+        while ids.len() < MAX_RECENT_TASKS {
+            ids.push(None);
+        }
+    }
     for (idx, item) in state.recent_items.iter().enumerate() {
         let label = match recent.get(idx) {
-            Some((name, status)) => {
+            Some((_id, name, status)) => {
                 format!("{} {} - {}", status_indicator(status), name, status)
             }
             None => "--".to_string(),
         };
         item.set_text(label)?;
+        item.set_enabled(recent.get(idx).is_some())?;
     }
 
     let worker_label = worker_status_label(app_handle);
@@ -184,7 +205,7 @@ fn tasks_last_hour_label(app_handle: &tauri::AppHandle) -> String {
     format!("Tasks last hour: {}", count)
 }
 
-fn fetch_recent_tasks(app_handle: &tauri::AppHandle) -> Result<Vec<(String, String)>> {
+fn fetch_recent_tasks(app_handle: &tauri::AppHandle) -> Result<Vec<(String, String, String)>> {
     let db_handle = app_handle.state::<DatabaseHandle>();
     let conn = match db_handle.connect(app_handle) {
         Ok(conn) => conn,
@@ -194,12 +215,26 @@ fn fetch_recent_tasks(app_handle: &tauri::AppHandle) -> Result<Vec<(String, Stri
         }
     };
     let mut stmt = match conn.prepare(
-        "select t.task_name, r.state
-         from absurd_runs r
-         join absurd_tasks t
+        "select
+            t.task_id,
+            t.task_name,
+            t.state,
+            max(
+                coalesce(
+                    r.completed_at,
+                    r.failed_at,
+                    r.started_at,
+                    r.created_at,
+                    t.cancelled_at,
+                    t.first_started_at,
+                    t.enqueue_at
+                )
+            ) as last_update
+         from absurd_tasks t
+         left join absurd_runs r
            on t.queue_name = r.queue_name and t.task_id = r.task_id
-         where r.state in ('completed', 'failed', 'cancelled')
-         order by r.created_at desc
+         group by t.task_id, t.task_name, t.state
+         order by last_update desc
          limit 5",
     ) {
         Ok(stmt) => stmt,
@@ -209,9 +244,10 @@ fn fetch_recent_tasks(app_handle: &tauri::AppHandle) -> Result<Vec<(String, Stri
         }
     };
     let rows = match stmt.query_map([], |row| {
-        let name: String = row.get(0)?;
-        let state: String = row.get(1)?;
-        Ok((name, state))
+        let id: String = row.get(0)?;
+        let name: String = row.get(1)?;
+        let state: String = row.get(2)?;
+        Ok((id, name, state))
     }) {
         Ok(rows) => rows,
         Err(err) => {
@@ -224,10 +260,13 @@ fn fetch_recent_tasks(app_handle: &tauri::AppHandle) -> Result<Vec<(String, Stri
 
 fn status_indicator(state: &str) -> &'static str {
     match state {
+        "running" => "▶️",
         "completed" => "✅",
         "failed" => "❌",
+        "sleeping" => "💤",
+        "pending" => "⏳",
         "cancelled" => "🚫",
-        _ => "•",
+        _ => "⚪️",
     }
 }
 
