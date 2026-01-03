@@ -1,0 +1,55 @@
+name: Release npm SDKs
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: typescript
+            path: sdks/typescript
+            build_command: npm run build
+            uses_bun: false
+            tag_prefix: sdks/typescript/
+          - package: bun-worker
+            path: sdks/bun-worker
+            build_command: bun run build
+            uses_bun: true
+            tag_prefix: sdks/bun-worker/
+    if: startsWith(github.event.release.tag_name, matrix.tag_prefix)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - name: Setup Bun
+        if: matrix.uses_bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - name: Install TypeScript SDK deps
+        run: npm install
+        working-directory: sdks/typescript
+      - name: Install Bun worker deps
+        if: matrix.uses_bun
+        run: bun install
+        working-directory: sdks/bun-worker
+      - name: Build package
+        run: ${{ matrix.build_command }}
+        working-directory: ${{ matrix.path }}
+      - name: Publish to npm (OIDC)
+        run: npm publish --provenance --access public
+        working-directory: ${{ matrix.path }}
