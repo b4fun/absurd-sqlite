@@ -1,5 +1,6 @@
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
-use tauri::{async_runtime, Manager};
+use tauri::tray::TrayIconEvent;
+use tauri::{async_runtime, Manager, WindowEvent};
 use tauri_plugin_cli::CliExt;
 
 use crate::dev_api::{load_dev_api_enabled, DevApiState};
@@ -8,6 +9,7 @@ use crate::{db::DatabaseHandle, worker::load_worker_binary_path};
 mod db;
 mod db_commands;
 mod dev_api;
+mod ui;
 mod worker;
 
 const DEVTOOLS_MENU_ID: &str = "open_devtools";
@@ -64,6 +66,28 @@ pub fn run() {
                     window.open_devtools();
                 }
             }
+            if _event.id() == ui::tray::TRAY_SHOW_ID {
+                if let Some(window) = _app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            if _event.id() == ui::tray::TRAY_QUIT_ID {
+                _app.exit(0);
+            }
+        })
+        .on_tray_icon_event(|app, event| {
+            if let TrayIconEvent::Enter { .. } = event {
+                let _ = ui::tray::refresh_now(app);
+            }
+        })
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
+            }
         })
         .setup(move |app| {
             let app_handle = app.handle().clone();
@@ -104,6 +128,9 @@ pub fn run() {
                     }
                 });
             }
+
+            ui::tray::setup(app)?;
+            ui::tray::start_updates(app_handle.clone());
 
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             {
