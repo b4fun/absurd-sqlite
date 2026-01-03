@@ -1200,7 +1200,7 @@ mod tests {
             .query_row("select absurd_create_queue('alpha')", [], |r| r.get(0))
             .unwrap();
 
-        let total_tasks = 10_000;
+        let total_tasks = 100_000;
 
         let insert_start = std::time::Instant::now();
         conn.execute_batch("begin").unwrap();
@@ -1270,7 +1270,7 @@ mod tests {
         let mut deleted_tasks = 0;
         loop {
             let deleted: i64 = conn
-                .query_row("select absurd_cleanup_tasks('alpha', 1, 500)", [], |r| {
+                .query_row("select absurd_cleanup_tasks('alpha', 1, 10_000)", [], |r| {
                     r.get(0)
                 })
                 .unwrap();
