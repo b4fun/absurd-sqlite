@@ -271,7 +271,7 @@ impl<'a> TauriDataProvider<'a> {
         }
 
         let ttl_seconds = options.ttl_seconds.max(0);
-        let limit = 500_i64;
+        let limit = 5000_i64;
         let mut deleted_total = 0;
 
         loop {
