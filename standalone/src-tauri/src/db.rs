@@ -118,6 +118,28 @@ pub fn extension_path(app_handle: &AppHandle) -> Result<String> {
 
 fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
     let lib_name = extension_lib_name();
+    #[cfg(debug_assertions)]
+    {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = manifest_dir
+            .parent()
+            .and_then(Path::parent)
+            .unwrap_or(&manifest_dir);
+        let target_dir = workspace_root.join("target");
+        let candidates = [
+            ("debug build", target_dir.join("debug").join(&lib_name)),
+            ("release build", target_dir.join("release").join(&lib_name)),
+        ];
+
+        for (label, path) in candidates {
+            log::debug!("Checking {} SQLite extension at {}", label, path.display());
+            if path.exists() {
+                log::info!("Using {} SQLite extension at {}", label, path.display());
+                return Some(path);
+            }
+        }
+    }
+
     match app_handle.path().resource_dir() {
         Ok(resource_dir) => {
             let resource_path = resource_dir.join("resources").join(&lib_name);
@@ -140,29 +162,24 @@ fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
         Err(err) => log::warn!("Failed to resolve resource directory: {}", err),
     }
 
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root = manifest_dir
-        .parent()
-        .and_then(Path::parent)
-        .unwrap_or(&manifest_dir);
-    let target_dir = workspace_root.join("target");
-    let candidates = [
-        ("debug build", target_dir.join("debug").join(&lib_name)),
-        ("release build", target_dir.join("release").join(&lib_name)),
-    ];
-
-    for (label, path) in candidates {
-        log::debug!("Checking {} SQLite extension at {}", label, path.display());
-        if path.exists() {
-            log::info!("Using {} SQLite extension at {}", label, path.display());
-            return Some(path);
-        }
+    #[cfg(debug_assertions)]
+    {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = manifest_dir
+            .parent()
+            .and_then(Path::parent)
+            .unwrap_or(&manifest_dir);
+        let target_dir = workspace_root.join("target");
+        log::warn!(
+            "SQLite extension not found. Checked bundled resources and build outputs in {}",
+            target_dir.display()
+        );
     }
 
-    log::warn!(
-        "SQLite extension not found. Checked bundled resources and build outputs in {}",
-        target_dir.display()
-    );
+    #[cfg(not(debug_assertions))]
+    {
+        log::warn!("SQLite extension not found in bundled resources.");
+    }
     None
 }
 
