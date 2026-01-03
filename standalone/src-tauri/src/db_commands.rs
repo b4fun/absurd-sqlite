@@ -413,7 +413,7 @@ impl<'a> TauriDataProvider<'a> {
                 json(r.failure_reason)
              from absurd_runs r
              join absurd_tasks t
-               on t.queue_name = r.queue_name and t.task_id = r.task_id{} 
+               on t.queue_name = r.queue_name and t.task_id = r.task_id{}
              order by r.created_at desc",
             filter_sql
         );
