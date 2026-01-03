@@ -5,7 +5,7 @@ name = "absurd-sqlite-extension"
 version = "0.1.0"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 name = "absurd"
 
 [dependencies]
@@ -16,4 +16,9 @@ sqlite3ext-sys = "0.0.1"
 uuid = {version = "1.7", features = ["v4", "v7", "fast-rng"]}
 
 [dev-dependencies]
+criterion = "0.8"
 rusqlite = {version = "0.38", features = ["load_extension", "bundled"]}
+
+[[bench]]
+name = "cleanup"
+harness = false

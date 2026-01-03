@@ -223,7 +223,7 @@ pub fn sqlite3_absurd_init(db: *mut sqlite3) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusqlite::{ffi::sqlite3_auto_extension, Connection};
+    use rusqlite::{ffi::sqlite3_auto_extension, params, Connection};
     use std::collections::HashMap;
 
     #[test]
@@ -1065,6 +1065,117 @@ mod tests {
             })
             .unwrap();
         assert_eq!(deleted_events, 1);
+    }
+
+    #[test]
+    fn test_cleanup_large_batches() {
+        unsafe {
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
+        }
+
+        let conn = Connection::open_in_memory().unwrap();
+        let _: i64 = conn
+            .query_row("select absurd_apply_migrations()", [], |row| row.get(0))
+            .unwrap();
+        let _: i64 = conn
+            .query_row("select absurd_create_queue('alpha')", [], |r| r.get(0))
+            .unwrap();
+
+        let total_tasks = 12_000;
+        let total_events = 12_000;
+
+        conn.execute_batch("begin").unwrap();
+        let mut insert_task = conn
+            .prepare(
+                "insert into absurd_tasks (queue_name, task_id, task_name, params, state)
+                 values (?1, ?2, ?3, ?4, 'completed')",
+            )
+            .unwrap();
+        let mut insert_run = conn
+            .prepare(
+                "insert into absurd_runs (queue_name, run_id, task_id, attempt, state, available_at, completed_at, created_at)
+                 values (?1, ?2, ?3, 1, 'completed', 1, 1, 1)",
+            )
+            .unwrap();
+        let mut update_task = conn
+            .prepare(
+                "update absurd_tasks set last_attempt_run = ?1 where queue_name = ?2 and task_id = ?3",
+            )
+            .unwrap();
+
+        for index in 0..total_tasks {
+            let task_id = format!("task_{}", index);
+            let run_id = format!("run_{}", index);
+            insert_task
+                .execute(params!["alpha", task_id, "demo", "{}"])
+                .unwrap();
+            insert_run
+                .execute(params!["alpha", run_id, task_id])
+                .unwrap();
+            update_task
+                .execute(params![run_id, "alpha", task_id])
+                .unwrap();
+        }
+        conn.execute_batch("commit").unwrap();
+
+        conn.execute_batch("begin").unwrap();
+        let mut insert_event = conn
+            .prepare(
+                "insert into absurd_events (queue_name, event_name, payload, emitted_at)
+                 values (?1, ?2, ?3, 1)",
+            )
+            .unwrap();
+        for index in 0..total_events {
+            let event_name = format!("event_{}", index);
+            insert_event
+                .execute(params!["alpha", event_name, "{}"])
+                .unwrap();
+        }
+        conn.execute_batch("commit").unwrap();
+
+        let mut deleted_tasks = 0;
+        loop {
+            let deleted: i64 = conn
+                .query_row("select absurd_cleanup_tasks('alpha', 1, 500)", [], |r| {
+                    r.get(0)
+                })
+                .unwrap();
+            deleted_tasks += deleted;
+            if deleted == 0 {
+                break;
+            }
+        }
+        assert_eq!(deleted_tasks, total_tasks);
+        let remaining_tasks: i64 = conn
+            .query_row(
+                "select count(*) from absurd_tasks where queue_name = 'alpha'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining_tasks, 0);
+
+        let mut deleted_events = 0;
+        loop {
+            let deleted: i64 = conn
+                .query_row("select absurd_cleanup_events('alpha', 1, 500)", [], |r| {
+                    r.get(0)
+                })
+                .unwrap();
+            deleted_events += deleted;
+            if deleted == 0 {
+                break;
+            }
+        }
+        assert_eq!(deleted_events, total_events);
+        let remaining_events: i64 = conn
+            .query_row(
+                "select count(*) from absurd_events where queue_name = 'alpha'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining_events, 0);
     }
 
     #[test]
