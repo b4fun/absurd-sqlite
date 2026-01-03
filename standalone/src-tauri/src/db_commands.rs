@@ -157,6 +157,27 @@ pub struct EventFilters {
     pub event_name: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CleanupTarget {
+    Tasks,
+    Events,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanupQueueOptions {
+    pub queue_name: String,
+    pub target: CleanupTarget,
+    pub ttl_seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanupResult {
+    pub deleted_count: i64,
+}
+
 pub struct TauriDataProvider<'a> {
     conn: &'a Connection,
     now_ms: i64,
@@ -241,6 +262,51 @@ impl<'a> TauriDataProvider<'a> {
             rusqlite::params![trimmed, current_time_ms()],
         )?;
         Ok(())
+    }
+
+    pub fn cleanup_queue(&self, options: CleanupQueueOptions) -> Result<CleanupResult> {
+        let queue_name = options.queue_name.trim();
+        if queue_name.is_empty() {
+            return Err(anyhow::anyhow!("Queue name is required"));
+        }
+
+        let ttl_seconds = options.ttl_seconds.max(0);
+        let limit = 500_i64;
+        let mut deleted_total = 0;
+
+        loop {
+            let deleted = match options.target {
+                CleanupTarget::Events => self.cleanup_events(queue_name, ttl_seconds, limit)?,
+                CleanupTarget::Tasks => self.cleanup_tasks(queue_name, ttl_seconds, limit)?,
+            };
+
+            deleted_total += deleted;
+            if ttl_seconds != 0 || deleted < limit {
+                break;
+            }
+        }
+
+        Ok(CleanupResult {
+            deleted_count: deleted_total,
+        })
+    }
+
+    fn cleanup_tasks(&self, queue_name: &str, ttl_seconds: i64, limit: i64) -> Result<i64> {
+        let deleted: i64 = self.conn.query_row(
+            "select absurd_cleanup_tasks(?1, ?2, ?3)",
+            rusqlite::params![queue_name, ttl_seconds, limit],
+            |row| row.get(0),
+        )?;
+        Ok(deleted)
+    }
+
+    fn cleanup_events(&self, queue_name: &str, ttl_seconds: i64, limit: i64) -> Result<i64> {
+        let deleted: i64 = self.conn.query_row(
+            "select absurd_cleanup_events(?1, ?2, ?3)",
+            rusqlite::params![queue_name, ttl_seconds, limit],
+            |row| row.get(0),
+        )?;
+        Ok(deleted)
     }
 
     pub fn get_queue_metrics(&self) -> Result<Vec<QueueMetric>> {
@@ -1172,6 +1238,17 @@ pub fn create_queue(
 ) -> Result<(), String> {
     with_provider(&app_handle, &db_handle, |provider| {
         provider.create_queue(&queue_name)
+    })
+}
+
+#[tauri::command]
+pub async fn cleanup_queue(
+    options: CleanupQueueOptions,
+    app_handle: AppHandle,
+    db_handle: State<'_, DatabaseHandle>,
+) -> Result<CleanupResult, String> {
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.cleanup_queue(options)
     })
 }
 

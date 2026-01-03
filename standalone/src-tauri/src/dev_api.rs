@@ -13,7 +13,9 @@ use tokio::task::JoinHandle;
 use tower_http::cors::CorsLayer;
 
 use crate::db::DatabaseHandle;
-use crate::db_commands::{EventFilters, TaskRunFilters, TauriDataProvider};
+use crate::db_commands::{
+    CleanupQueueOptions, CleanupTarget, EventFilters, TaskRunFilters, TauriDataProvider,
+};
 use crate::worker;
 
 const DEV_API_PORT_DEFAULT: u16 = 11223;
@@ -379,6 +381,13 @@ fn handle_procedure(
                 Ok(Value::Null)
             })
         }
+        "cleanupQueue" => {
+            let payload: CleanupQueueInput = parse_input(input)?;
+            with_provider(app_handle, |provider| {
+                let result = provider.cleanup_queue(payload.into())?;
+                Ok(serde_json::to_value(result)?)
+            })
+        }
         "getEventFilterDefaults" => {
             let payload: OptionalQueueNameInput = parse_optional_input(input)?;
             with_provider(app_handle, |provider| {
@@ -492,4 +501,22 @@ struct TaskIdInput {
 #[serde(rename_all = "camelCase")]
 struct MigrationInput {
     migration_id: i64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CleanupQueueInput {
+    queue_name: String,
+    target: CleanupTarget,
+    ttl_seconds: i64,
+}
+
+impl From<CleanupQueueInput> for CleanupQueueOptions {
+    fn from(value: CleanupQueueInput) -> Self {
+        Self {
+            queue_name: value.queue_name,
+            target: value.target,
+            ttl_seconds: value.ttl_seconds,
+        }
+    }
 }
