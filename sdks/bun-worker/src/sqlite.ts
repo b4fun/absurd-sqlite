@@ -1,0 +1,169 @@
+import { Database } from "bun:sqlite";
+
+import type { Queryable } from "@absurd-sqlite/sdk";
+import type {
+  SQLiteBindParams,
+  SQLiteBindValue,
+  SQLiteRestBindParams,
+} from "@absurd-sqlite/sdk";
+
+export class BunSqliteConnection implements Queryable {
+  private readonly db: Database;
+
+  constructor(db: Database) {
+    this.db = db;
+  }
+
+  async query<R extends object = Record<string, any>>(
+    sql: string,
+    params?: SQLiteRestBindParams
+  ): Promise<{ rows: R[] }> {
+    const { sql: sqliteQuery, paramOrder } = rewritePostgresQuery(sql);
+    const sqliteParams = rewritePostgresParams(
+      normalizeParams(params),
+      paramOrder
+    );
+
+    const statement = this.db.query(sqliteQuery);
+    const rows = statement.all(...sqliteParams).map((row) =>
+      decodeRowValues(row as Record<string, unknown>)
+    );
+
+    return { rows: rows as R[] };
+  }
+
+  async exec(sql: string, params?: SQLiteRestBindParams): Promise<void> {
+    const { sql: sqliteQuery, paramOrder } = rewritePostgresQuery(sql);
+    const sqliteParams = rewritePostgresParams(
+      normalizeParams(params),
+      paramOrder
+    );
+
+    this.db.query(sqliteQuery).run(...sqliteParams);
+  }
+}
+
+function rewritePostgresQuery(text: string): {
+  sql: string;
+  paramOrder: number[];
+} {
+  const paramOrder: number[] = [];
+  const sql = text
+    .replace(/\$(\d+)/g, (_, index) => {
+      paramOrder.push(Number(index));
+      return "?";
+    })
+    .replace(/absurd\.(\w+)/g, "absurd_$1");
+
+  return { sql, paramOrder };
+}
+
+function rewritePostgresParams<I = any>(
+  params: SQLiteBindValue[],
+  paramOrder: number[]
+): I[] {
+  if (paramOrder.length === 0) {
+    return params.map((value) => encodeColumnValue(value)) as I[];
+  }
+
+  return paramOrder.map((index) => {
+    const value = params[index - 1];
+    return encodeColumnValue(value) as I;
+  });
+}
+
+function decodeRowValues<R extends object = any>(
+  row: Record<string, unknown>
+): R {
+  const decodedRow: any = {};
+  for (const [columnName, rawValue] of Object.entries(row)) {
+    decodedRow[columnName] = decodeColumnValue(rawValue, columnName);
+  }
+
+  return decodedRow as R;
+}
+
+function decodeColumnValue<V = any>(
+  value: unknown | V,
+  columnName: string
+): V | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (isTimestampColumn(columnName)) {
+    if (typeof value === "number") {
+      return new Date(value) as V;
+    }
+    if (typeof value === "string") {
+      const parsed = Date.parse(value);
+      if (!Number.isNaN(parsed)) {
+        return new Date(parsed) as V;
+      }
+    }
+  }
+
+  if (typeof value === "string") {
+    return tryDecodeJson(value) ?? (value as V);
+  }
+
+  if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
+    const bytes =
+      value instanceof Uint8Array ? value : new Uint8Array(value);
+    const decoded = new TextDecoder().decode(bytes);
+    return tryDecodeJson(decoded) ?? (value as V);
+  }
+
+  return value as V;
+}
+
+function tryDecodeJson<V = any>(value: string): V | null {
+  try {
+    return JSON.parse(value) as V;
+  } catch {
+    return null;
+  }
+}
+
+function encodeColumnValue(value: any): any {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (typeof value === "number" && Number.isInteger(value)) {
+    return value.toString();
+  }
+  return value;
+}
+
+function isTimestampColumn(columnName: string): boolean {
+  return columnName.endsWith("_at");
+}
+
+function normalizeParams(
+  params?: SQLiteRestBindParams
+): SQLiteBindValue[] {
+  if (!params) {
+    return [];
+  }
+
+  if (params.length === 1 && isBindParams(params[0])) {
+    const inner = params[0];
+    if (Array.isArray(inner)) {
+      return inner;
+    }
+    return Object.values(inner);
+  }
+
+  return params as SQLiteBindValue[];
+}
+
+function isBindParams(value: unknown): value is SQLiteBindParams {
+  if (Array.isArray(value)) {
+    return true;
+  }
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const tag = Object.prototype.toString.call(value);
+  return tag === "[object Object]";
+}
