@@ -68,6 +68,7 @@ fn absurd_init(db: *mut sqlite3) -> Result<()> {
             "jsonb() requires SQLite 3.45.0+; please upgrade SQLite",
         ));
     }
+    sql::ensure_wal_journal_mode(db)?;
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
     define_scalar_function(db, "absurd_version", 0, absurd_version, flags)?;
     define_scalar_function(db, "absurd_create_queue", 1, absurd_create_queue, flags)?;
@@ -229,6 +230,7 @@ mod tests {
     use super::*;
     use rusqlite::{ffi::sqlite3_auto_extension, params, Connection};
     use std::collections::HashMap;
+    use uuid::Uuid;
 
     #[test]
     fn test_absurd_version() {
@@ -1230,5 +1232,22 @@ mod tests {
             )
             .unwrap();
         assert_eq!(run_state, "cancelled");
+    }
+
+    #[test]
+    fn test_enables_wal_journal_mode_for_file_db() {
+        unsafe {
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
+        }
+
+        let db_path = std::env::temp_dir().join(format!("absurd-wal-{}.db", Uuid::new_v4()));
+        let conn = Connection::open(&db_path).unwrap();
+
+        let journal_mode: String = conn
+            .query_row("pragma journal_mode", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(journal_mode.to_lowercase(), "wal");
+
+        let _ = std::fs::remove_file(db_path);
     }
 }

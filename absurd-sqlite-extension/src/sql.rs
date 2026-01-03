@@ -3,7 +3,7 @@ use sqlite_loadable::ext::{
     sqlite3ext_bind_text, sqlite3ext_finalize, sqlite3ext_prepare_v2, sqlite3ext_step,
 };
 use sqlite_loadable::{Error, Result, SQLITE_DONE, SQLITE_OKAY, SQLITE_ROW};
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -173,4 +173,41 @@ pub fn now_ms_from_db(db: *mut sqlite3) -> i64 {
     }
 
     now_ms()
+}
+
+pub fn ensure_wal_journal_mode(db: *mut sqlite3) -> Result<()> {
+    let mut stmt = sqlite_loadable::exec::Statement::prepare(db, "pragma journal_mode=WAL")
+        .map_err(|err| Error::new_message(format!("failed to enable WAL mode: {:?}", err)))?;
+    let mut rows = stmt.execute();
+    let row = match rows.next() {
+        Some(Ok(row)) => row,
+        _ => {
+            return Err(Error::new_message(
+                "failed to read journal_mode after enabling WAL",
+            ))
+        }
+    };
+    let mode = row
+        .get::<String>(0)
+        .map_err(|err| Error::new_message(format!("failed to read journal_mode: {:?}", err)))?;
+    if mode.eq_ignore_ascii_case("wal") || db_is_in_memory(db) {
+        return Ok(());
+    }
+    Err(Error::new_message(format!(
+        "expected journal_mode to be WAL, found {}",
+        mode
+    )))
+}
+
+fn db_is_in_memory(db: *mut sqlite3) -> bool {
+    let main = CString::new("main").unwrap();
+    let filename_ptr = unsafe { sqlite3ext_sys::sqlite3_db_filename(db, main.as_ptr()) };
+    if filename_ptr.is_null() {
+        return true;
+    }
+    let filename = unsafe { CStr::from_ptr(filename_ptr) }
+        .to_string_lossy()
+        .into_owned();
+    let trimmed = filename.trim();
+    trimmed.is_empty() || trimmed == ":memory:"
 }
