@@ -1,0 +1,21 @@
+{
+  "name": "@absurd-sqlite-samples/bun-worker",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "prebuild": "cd ../../sdks/bun-worker && bun run build && cd ../../samples/bun-worker && bun install",
+    "build": "bun build --compile src/index.ts --outfile dist/bun-worker",
+    "start": "bun run src/index.ts",
+    "type-check": "bun run prebuild && bun x tsc --noEmit"
+  },
+  "author": "",
+  "license": "Apache-2.0",
+  "description": "",
+  "dependencies": {
+    "@absurd-sqlite/bun-worker": "file:../../sdks/bun-worker"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.5",
+    "typescript": "^5.9.3"
+  }
+}

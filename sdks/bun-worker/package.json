@@ -5,6 +5,12 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "prebuild": "cd ../typescript && npm run build",
     "build": "bun run prebuild && bun build ./src/index.ts --outdir ./dist --target bun && bun x tsc -p tsconfig.build.json",
