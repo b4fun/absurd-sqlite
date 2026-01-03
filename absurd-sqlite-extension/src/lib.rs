@@ -1187,6 +1187,143 @@ mod tests {
     }
 
     #[test]
+    fn test_cleanup_tasks_large_with_children() {
+        unsafe {
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));
+        }
+
+        let conn = Connection::open_in_memory().unwrap();
+        let _: i64 = conn
+            .query_row("select absurd_apply_migrations()", [], |row| row.get(0))
+            .unwrap();
+        let _: i64 = conn
+            .query_row("select absurd_create_queue('alpha')", [], |r| r.get(0))
+            .unwrap();
+
+        let total_tasks = 100_000;
+
+        let insert_start = std::time::Instant::now();
+        conn.execute_batch("begin").unwrap();
+        conn.execute(
+            "insert into absurd_events (queue_name, event_name, payload, emitted_at)
+             values (?1, ?2, ?3, 1)",
+            params!["alpha", "eventA", "{}"],
+        )
+        .unwrap();
+
+        let mut insert_task = conn
+            .prepare(
+                "insert into absurd_tasks (queue_name, task_id, task_name, params, state)
+                 values (?1, ?2, ?3, ?4, 'completed')",
+            )
+            .unwrap();
+        let mut insert_run = conn
+            .prepare(
+                "insert into absurd_runs (queue_name, run_id, task_id, attempt, state, available_at, completed_at, created_at)
+                 values (?1, ?2, ?3, 1, 'completed', 1, 1, 1)",
+            )
+            .unwrap();
+        let mut update_task = conn
+            .prepare(
+                "update absurd_tasks set last_attempt_run = ?1 where queue_name = ?2 and task_id = ?3",
+            )
+            .unwrap();
+        let mut insert_checkpoint = conn
+            .prepare(
+                "insert into absurd_checkpoints (queue_name, task_id, checkpoint_name, state, owner_run_id, updated_at)
+                 values (?1, ?2, ?3, ?4, ?5, 1)",
+            )
+            .unwrap();
+        let mut insert_wait = conn
+            .prepare(
+                "insert into absurd_waits (queue_name, task_id, run_id, step_name, event_name, timeout_at, created_at)
+                 values (?1, ?2, ?3, ?4, ?5, null, 1)",
+            )
+            .unwrap();
+
+        for index in 0..total_tasks {
+            let task_id = format!("task_{}", index);
+            let run_id = format!("run_{}", index);
+            insert_task
+                .execute(params!["alpha", task_id, "demo", "{}"])
+                .unwrap();
+            insert_run
+                .execute(params!["alpha", run_id, task_id])
+                .unwrap();
+            update_task
+                .execute(params![run_id, "alpha", task_id])
+                .unwrap();
+            insert_checkpoint
+                .execute(params!["alpha", task_id, "checkpoint_a", "{}", run_id])
+                .unwrap();
+            insert_checkpoint
+                .execute(params!["alpha", task_id, "checkpoint_b", "{}", run_id])
+                .unwrap();
+            insert_wait
+                .execute(params!["alpha", task_id, run_id, "step1", "eventA"])
+                .unwrap();
+        }
+        conn.execute_batch("commit").unwrap();
+        let insert_elapsed = insert_start.elapsed();
+
+        let delete_start = std::time::Instant::now();
+        let mut deleted_tasks = 0;
+        loop {
+            let deleted: i64 = conn
+                .query_row("select absurd_cleanup_tasks('alpha', 1, 10_000)", [], |r| {
+                    r.get(0)
+                })
+                .unwrap();
+            deleted_tasks += deleted;
+            if deleted == 0 {
+                break;
+            }
+        }
+        assert_eq!(deleted_tasks, total_tasks);
+
+        let remaining_tasks: i64 = conn
+            .query_row(
+                "select count(*) from absurd_tasks where queue_name = 'alpha'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining_tasks, 0);
+
+        let remaining_runs: i64 = conn
+            .query_row(
+                "select count(*) from absurd_runs where queue_name = 'alpha'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining_runs, 0);
+
+        let remaining_checkpoints: i64 = conn
+            .query_row(
+                "select count(*) from absurd_checkpoints where queue_name = 'alpha'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining_checkpoints, 0);
+
+        let remaining_waits: i64 = conn
+            .query_row(
+                "select count(*) from absurd_waits where queue_name = 'alpha'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining_waits, 0);
+        let delete_elapsed = delete_start.elapsed();
+        eprintln!(
+            "test_cleanup_tasks_large_with_children insert: {:?} delete: {:?}",
+            insert_elapsed, delete_elapsed
+        );
+    }
+
+    #[test]
     fn test_cancel_task_basic() {
         unsafe {
             sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_absurd_init as *const ())));

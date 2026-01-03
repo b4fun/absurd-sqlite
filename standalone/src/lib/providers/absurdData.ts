@@ -193,7 +193,7 @@ export const tauriAbsurdProvider: AbsurdDataProvider = {
   getMigrations: () => tauriInvoke("get_migrations"),
   applyMigrationsAll: () => tauriInvoke("apply_migrations_all"),
   applyMigration: (migrationId) =>
-    tauriInvoke("apply_migration", { migration_id: migrationId }),
+    tauriInvoke("apply_migration", { migrationId }),
 };
 
 const mockMigrations: MigrationEntry[] = [

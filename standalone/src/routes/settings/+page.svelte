@@ -32,6 +32,7 @@
   let workerPathDraft = $state("");
   let workerPathTouched = $state(false);
   let workerError = $state<string | null>(null);
+  let migrationsError = $state<string | null>(null);
   let workerAction = $state<"idle" | "saving" | "starting" | "stopping">("idle");
   let workerLogs = $state<WorkerLogLine[]>([]);
   let workerLogsRef = $state<HTMLDivElement | null>(null);
@@ -62,6 +63,18 @@
     workerStatus ? (workerStatus.configuredPath ?? "") !== normalizedWorkerPath : false,
   );
   const workerPathConfigured = $derived(normalizedWorkerPath.length > 0);
+  const migrationErrorMessage = (error: unknown) => {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "Failed to apply migration.";
+    if (message.includes("target version is newer than available migrations")) {
+      return "Migration files are newer than the loaded SQLite extension. Rebuild the extension and restart the app.";
+    }
+    return message;
+  };
   const workerStatusLabel = $derived.by(() => {
     if (!workerStatus) {
       return "Loading...";
@@ -125,13 +138,23 @@
   };
 
   const handleApplyAll = async () => {
-    await provider.applyMigrationsAll();
-    await refreshData();
+    migrationsError = null;
+    try {
+      await provider.applyMigrationsAll();
+      await refreshData();
+    } catch (error) {
+      migrationsError = migrationErrorMessage(error);
+    }
   };
 
   const handleApplyMigration = async (migrationId: number) => {
-    await provider.applyMigration(migrationId);
-    await refreshData();
+    migrationsError = null;
+    try {
+      await provider.applyMigration(migrationId);
+      await refreshData();
+    } catch (error) {
+      migrationsError = migrationErrorMessage(error);
+    }
   };
 
   const handleCopyPath = async () => {
@@ -557,6 +580,9 @@
         </tbody>
       </table>
     </div>
+    {#if migrationsError}
+      <p class="mt-3 text-sm text-rose-600">{migrationsError}</p>
+    {/if}
   </article>
 
   {#if showDevApi}

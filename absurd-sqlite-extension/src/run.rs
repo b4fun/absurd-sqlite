@@ -584,6 +584,15 @@ pub fn absurd_schedule_run(
     }
 }
 
+/// Remove terminal tasks for a queue that are older than the TTL cutoff.
+///
+/// Flow:
+/// - Disable foreign key enforcement inside the cleanup transaction for speed.
+/// - Select eligible task IDs (completed/failed/cancelled and older than cutoff)
+///   into a uniquely named temp table to avoid collisions across concurrent calls.
+/// - Delete dependent rows (waits, checkpoints, runs) before tasks to preserve
+///   referential integrity while FK checks are disabled.
+/// - Drop the temp table and restore foreign key enforcement on commit/rollback.
 pub fn absurd_cleanup_tasks(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
@@ -599,47 +608,97 @@ pub fn absurd_cleanup_tasks(
     let cutoff_value = cutoff.to_string();
     let limit_value = limit.to_string();
 
-    sql::exec_with_bind_text(db, "begin immediate", &[])?;
+    sql::exec_with_bind_text(db, "pragma foreign_keys = off", &[])?;
+    if let Err(err) = sql::exec_with_bind_text(db, "begin immediate", &[]) {
+        let _ = sql::exec_with_bind_text(db, "pragma foreign_keys = on", &[]);
+        return Err(err);
+    }
 
     let deleted = (|| -> Result<i64> {
-        sql::exec_with_bind_text(
-            db,
-            "delete from absurd_tasks
-              where rowid in (
-                select rowid
-                  from (
-                    select t.rowid as rowid,
-                           case
-                             when t.state = 'completed' then r.completed_at
-                             when t.state = 'failed' then r.failed_at
-                             when t.state = 'cancelled' then t.cancelled_at
-                             else null
-                           end as terminal_at
-                      from absurd_tasks t
-                      left join absurd_runs r
-                        on r.queue_name = t.queue_name
-                       and r.run_id = t.last_attempt_run
-                     where t.queue_name = ?1
-                       and t.state in ('completed','failed','cancelled')
-                  )
-                 where terminal_at is not null
-                   and terminal_at < cast(?2 as integer)
-                 order by terminal_at
-                 limit cast(?3 as integer)
-              )",
-            &[queue_name, &cutoff_value, &limit_value],
-        )?;
+        // Build a uniquely named temp table to avoid collisions across concurrent cleanups.
+        let temp_table = format!("temp_cleanup_task_ids_{}", uuid::Uuid::now_v7().simple());
+        let drop_sql = format!("drop table if exists {}", temp_table);
+        let create_sql = format!(
+            "create temp table {} (task_id text primary key)",
+            temp_table
+        );
+        sql::exec_batch(db, &drop_sql)?;
+        sql::exec_batch(db, &create_sql)?;
 
-        sql::query_row_i64(db, "select changes()", &[])
+        // Select terminal tasks (by run completion/failure or task cancellation) into temp table.
+        let insert_sql = format!(
+            "insert into {} (task_id)
+             select task_id
+               from (
+                 select t.task_id as task_id,
+                        case
+                          when t.state = 'completed' then r.completed_at
+                          when t.state = 'failed' then r.failed_at
+                          when t.state = 'cancelled' then t.cancelled_at
+                          else null
+                        end as terminal_at
+                   from absurd_tasks t
+                   left join absurd_runs r
+                     on r.queue_name = t.queue_name
+                    and r.run_id = t.last_attempt_run
+                  where t.queue_name = ?1
+                    and t.state in ('completed','failed','cancelled')
+               )
+              where terminal_at is not null
+                and terminal_at < cast(?2 as integer)
+              order by terminal_at
+              limit cast(?3 as integer)",
+            temp_table
+        );
+        sql::exec_with_bind_text(db, &insert_sql, &[queue_name, &cutoff_value, &limit_value])?;
+
+        // Delete dependent rows first, then tasks, while foreign key checks are disabled.
+        let delete_waits_sql = format!(
+            "delete from absurd_waits
+              where queue_name = ?1
+                and task_id in (select task_id from {})",
+            temp_table
+        );
+        sql::exec_with_bind_text(db, &delete_waits_sql, &[queue_name])?;
+
+        let delete_checkpoints_sql = format!(
+            "delete from absurd_checkpoints
+              where queue_name = ?1
+                and task_id in (select task_id from {})",
+            temp_table
+        );
+        sql::exec_with_bind_text(db, &delete_checkpoints_sql, &[queue_name])?;
+
+        let delete_runs_sql = format!(
+            "delete from absurd_runs
+              where queue_name = ?1
+                and task_id in (select task_id from {})",
+            temp_table
+        );
+        sql::exec_with_bind_text(db, &delete_runs_sql, &[queue_name])?;
+
+        let delete_tasks_sql = format!(
+            "delete from absurd_tasks
+              where queue_name = ?1
+                and task_id in (select task_id from {})",
+            temp_table
+        );
+        sql::exec_with_bind_text(db, &delete_tasks_sql, &[queue_name])?;
+
+        let deleted = sql::query_row_i64(db, "select changes()", &[])?;
+        sql::exec_batch(db, &drop_sql)?;
+        Ok(deleted)
     })();
 
     let deleted = match deleted {
         Ok(count) => {
             sql::exec_with_bind_text(db, "commit", &[])?;
+            sql::exec_with_bind_text(db, "pragma foreign_keys = on", &[])?;
             count
         }
         Err(err) => {
             let _ = sql::exec_with_bind_text(db, "rollback", &[]);
+            let _ = sql::exec_with_bind_text(db, "pragma foreign_keys = on", &[]);
             return Err(err);
         }
     };
