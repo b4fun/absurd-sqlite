@@ -1,0 +1,105 @@
+name: SDKs CI
+
+on:
+  pull_request:
+    paths:
+      - sdks/bun-worker/**
+      - sdks/typescript/**
+      - samples/bun-worker/**
+      - .github/workflows/ci-sdks.yml
+  push:
+    paths:
+      - sdks/bun-worker/**
+      - sdks/typescript/**
+      - samples/bun-worker/**
+      - .github/workflows/ci-sdks.yml
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      bun_worker: ${{ steps.filter.outputs.bun_worker }}
+      typescript_sdk: ${{ steps.filter.outputs.typescript_sdk }}
+      bun_worker_sample: ${{ steps.filter.outputs.bun_worker_sample }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            bun_worker:
+              - 'sdks/bun-worker/**'
+            typescript_sdk:
+              - 'sdks/typescript/**'
+            bun_worker_sample:
+              - 'samples/bun-worker/**'
+
+  bun-worker:
+    name: Bun Worker
+    runs-on: ${{ matrix.os }}
+    needs: changes
+    if: needs.changes.outputs.bun_worker == 'true' || needs.changes.outputs.typescript_sdk == 'true'
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install TypeScript SDK deps
+        run: npm install
+        working-directory: sdks/typescript
+      - name: TypeScript SDK type-check
+        if: needs.changes.outputs.typescript_sdk == 'true'
+        run: npm run type-check
+        working-directory: sdks/typescript
+      - name: Install Bun worker deps
+        run: bun install
+        working-directory: sdks/bun-worker
+      - name: Bun worker type-check
+        run: bun run type-check
+        working-directory: sdks/bun-worker
+      - name: Bun worker tests
+        run: bun run test
+        working-directory: sdks/bun-worker
+
+  bun-worker-sample:
+    name: Bun Worker Sample
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.bun_worker_sample == 'true' || needs.changes.outputs.bun_worker == 'true' || needs.changes.outputs.typescript_sdk == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - name: Install TypeScript SDK deps
+        run: npm install
+        working-directory: sdks/typescript
+      - name: Install Bun worker deps
+        run: bun install
+        working-directory: sdks/bun-worker
+      - name: Install sample deps
+        run: bun install
+        working-directory: samples/bun-worker
+      - name: Sample type-check
+        run: bun run type-check
+        working-directory: samples/bun-worker
