@@ -19,7 +19,11 @@ mod validate;
 
 fn absurd_version(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<()> {
     let version = env!("CARGO_PKG_VERSION");
-    sqlite_loadable::api::result_text(context, format!("absurd-sqlite/{}", version))?;
+    let git_commit = env!("GIT_COMMIT");
+    sqlite_loadable::api::result_text(
+        context,
+        format!("absurd-sqlite/{} ({})", version, git_commit),
+    )?;
     Ok(())
 }
 
@@ -241,10 +245,12 @@ mod tests {
             .query_row("select absurd_version()", [], |row| row.get(0))
             .unwrap();
 
-        assert_eq!(
-            result,
-            format!("absurd-sqlite/{}", env!("CARGO_PKG_VERSION"))
+        let expected = format!(
+            "absurd-sqlite/{} ({})",
+            env!("CARGO_PKG_VERSION"),
+            env!("GIT_COMMIT")
         );
+        assert_eq!(result, expected);
     }
 
     #[test]
