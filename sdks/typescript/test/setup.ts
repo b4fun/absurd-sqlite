@@ -158,6 +158,10 @@ function createFixture(): SqliteFixture {
   const tempDir = mkdtempSync(join(tmpdir(), "absurd-sqlite-"));
   const dbPath = join(tempDir, "absurd.db");
   const db = new sqlite(dbPath);
+  
+  // Enable WAL mode for better concurrency and performance
+  db.exec("PRAGMA journal_mode=WAL");
+  
   db.loadExtension(extensionPath);
   db.prepare("select absurd_apply_migrations()").get();
   const conn = new SqliteConnection(db as unknown as SQLiteDatabase);

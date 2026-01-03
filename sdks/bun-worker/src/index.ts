@@ -29,6 +29,10 @@ export default async function run(
   }
 
   const db = new Database(dbPath);
+  
+  // Enable WAL mode for better concurrency and performance
+  db.exec("PRAGMA journal_mode=WAL");
+  
   (db as unknown as { loadExtension(path: string): void }).loadExtension(
     extensionPath
   );
