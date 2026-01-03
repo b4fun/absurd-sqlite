@@ -10,6 +10,9 @@ async function main() {
     );
   }
   const db = sqlite(dbPath) as unknown as SQLiteDatabase;
+  
+  // Enable WAL mode for better concurrency and performance
+  db.exec("PRAGMA journal_mode=WAL");
 
   const absurd = new Absurd(db, extensionPath);
 
