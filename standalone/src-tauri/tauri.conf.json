@@ -29,8 +29,9 @@
       "resources/*"
     ],
     "icon": [
-      "icons/logo-32x32.png",
-      "icons/logo-128x128.png",
+      "icons/logo-48x48.png",
+      "icons/logo-64x64.png",
+      "icons/logo-256x256.png",
       "icons/logo-512x512.png",
       "icons/logo-1024x1024.png",
       "icons/icon.icns",

@@ -8,7 +8,7 @@ file_name_noext=$(basename "$input" | sed 's/\.[^.]*$//')
 
 mkdir -p "${file_name_noext}"
 
-for s in 16 24 32 48 64 96 128 256 512 1024; do
+for s in 48 64 256 512 1024; do
   magick "$input" -resize ${s}x${s} ${file_name_noext}/logo-${s}x${s}.png
 done
 

@@ -39,7 +39,10 @@
     class:header-compact={isCompact}
   >
     <div class="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-8 py-4 transition-all duration-200 header-inner">
-      <p class="text-base font-semibold text-slate-900 header-logo select-none">Absurd Habitat</p>
+      <div class="flex items-center gap-2 text-base font-semibold text-slate-900 header-logo select-none">
+        <img src="/logo.png" alt="Absurd SQLite logo" class="h-8 w-8 header-logo-icon" />
+        <span class="header-logo-text">Absurd SQLite</span>
+      </div>
       <nav class="flex items-center gap-3 text-sm text-slate-600">
         {#each navItems as item}
           <a
@@ -66,10 +69,15 @@
 </div>
 
 <style>
-  header.header-compact .header-logo {
+  header.header-compact .header-logo-text {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
+  }
+
+  header.header-compact .header-logo-icon {
+    height: 1.5rem;
+    width: 1.5rem;
   }
 
   header.header-compact .header-inner {
