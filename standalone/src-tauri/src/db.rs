@@ -65,6 +65,9 @@ impl DatabaseHandle {
         let db_path = self.db_path(app_handle)?;
         let conn = Connection::open(db_path)?;
 
+        // Enable WAL mode for better concurrency and performance
+        conn.pragma_update(None, "journal_mode", "WAL")?;
+
         log::info!("using SQLite version: {}", rusqlite::version());
 
         let extension_path = resolve_extension_path(app_handle);

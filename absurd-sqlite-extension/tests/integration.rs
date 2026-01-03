@@ -35,10 +35,12 @@ fn apply_migrations(conn: &Connection) {
         .expect("apply migrations");
 }
 
-#[test]
-fn test_extension_with_real_db() {
-    let db_path = std::env::temp_dir().join(format!("absurd-test-{}.db", Uuid::new_v4()));
-    let conn = Connection::open(&db_path).expect("open db");
+fn setup_test_db(db_path: &Path) -> Connection {
+    let conn = Connection::open(db_path).expect("open db");
+
+    // Enable WAL mode for better concurrency and performance
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .expect("enable WAL mode");
 
     let ext_path = extension_path();
     build_extension(&ext_path);
@@ -52,6 +54,13 @@ fn test_extension_with_real_db() {
     }
 
     apply_migrations(&conn);
+    conn
+}
+
+#[test]
+fn test_extension_with_real_db() {
+    let db_path = std::env::temp_dir().join(format!("absurd-test-{}.db", Uuid::new_v4()));
+    let conn = setup_test_db(&db_path);
 
     let _: i64 = conn
         .query_row("select absurd_create_queue('alpha')", [], |r| r.get(0))
@@ -106,20 +115,7 @@ fn test_extension_with_real_db() {
 #[test]
 fn test_claim_timeout_creates_retry_run() {
     let db_path = std::env::temp_dir().join(format!("absurd-test-{}.db", Uuid::new_v4()));
-    let conn = Connection::open(&db_path).expect("open db");
-
-    let ext_path = extension_path();
-    build_extension(&ext_path);
-
-    unsafe {
-        conn.load_extension_enable().expect("enable load_extension");
-        conn.load_extension(&ext_path, None::<&str>)
-            .expect("load extension");
-        conn.load_extension_disable()
-            .expect("disable load_extension");
-    }
-
-    apply_migrations(&conn);
+    let conn = setup_test_db(&db_path);
 
     let _: i64 = conn
         .query_row("select absurd_create_queue('alpha')", [], |r| r.get(0))
@@ -188,20 +184,7 @@ fn test_claim_timeout_creates_retry_run() {
 #[test]
 fn test_schedule_and_fail_run_integration() {
     let db_path = std::env::temp_dir().join(format!("absurd-test-{}.db", Uuid::new_v4()));
-    let conn = Connection::open(&db_path).expect("open db");
-
-    let ext_path = extension_path();
-    build_extension(&ext_path);
-
-    unsafe {
-        conn.load_extension_enable().expect("enable load_extension");
-        conn.load_extension(&ext_path, None::<&str>)
-            .expect("load extension");
-        conn.load_extension_disable()
-            .expect("disable load_extension");
-    }
-
-    apply_migrations(&conn);
+    let conn = setup_test_db(&db_path);
 
     let _: i64 = conn
         .query_row("select absurd_create_queue('alpha')", [], |r| r.get(0))
@@ -286,20 +269,7 @@ fn test_schedule_and_fail_run_integration() {
 #[test]
 fn test_complete_and_extend_claim_integration() {
     let db_path = std::env::temp_dir().join(format!("absurd-test-{}.db", Uuid::new_v4()));
-    let conn = Connection::open(&db_path).expect("open db");
-
-    let ext_path = extension_path();
-    build_extension(&ext_path);
-
-    unsafe {
-        conn.load_extension_enable().expect("enable load_extension");
-        conn.load_extension(&ext_path, None::<&str>)
-            .expect("load extension");
-        conn.load_extension_disable()
-            .expect("disable load_extension");
-    }
-
-    apply_migrations(&conn);
+    let conn = setup_test_db(&db_path);
 
     let _: i64 = conn
         .query_row("select absurd_create_queue('alpha')", [], |r| r.get(0))
@@ -381,20 +351,7 @@ fn test_complete_and_extend_claim_integration() {
 #[test]
 fn test_checkpoint_and_event_integration() {
     let db_path = std::env::temp_dir().join(format!("absurd-test-{}.db", Uuid::new_v4()));
-    let conn = Connection::open(&db_path).expect("open db");
-
-    let ext_path = extension_path();
-    build_extension(&ext_path);
-
-    unsafe {
-        conn.load_extension_enable().expect("enable load_extension");
-        conn.load_extension(&ext_path, None::<&str>)
-            .expect("load extension");
-        conn.load_extension_disable()
-            .expect("disable load_extension");
-    }
-
-    apply_migrations(&conn);
+    let conn = setup_test_db(&db_path);
 
     let _: i64 = conn
         .query_row("select absurd_create_queue('alpha')", [], |r| r.get(0))
@@ -478,20 +435,7 @@ fn test_checkpoint_and_event_integration() {
 #[test]
 fn test_cleanup_integration() {
     let db_path = std::env::temp_dir().join(format!("absurd-test-{}.db", Uuid::new_v4()));
-    let conn = Connection::open(&db_path).expect("open db");
-
-    let ext_path = extension_path();
-    build_extension(&ext_path);
-
-    unsafe {
-        conn.load_extension_enable().expect("enable load_extension");
-        conn.load_extension(&ext_path, None::<&str>)
-            .expect("load extension");
-        conn.load_extension_disable()
-            .expect("disable load_extension");
-    }
-
-    apply_migrations(&conn);
+    let conn = setup_test_db(&db_path);
 
     let _: i64 = conn
         .query_row("select absurd_create_queue('alpha')", [], |r| r.get(0))
@@ -559,20 +503,7 @@ fn test_cleanup_integration() {
 #[test]
 fn test_cancel_task_integration() {
     let db_path = std::env::temp_dir().join(format!("absurd-test-{}.db", Uuid::new_v4()));
-    let conn = Connection::open(&db_path).expect("open db");
-
-    let ext_path = extension_path();
-    build_extension(&ext_path);
-
-    unsafe {
-        conn.load_extension_enable().expect("enable load_extension");
-        conn.load_extension(&ext_path, None::<&str>)
-            .expect("load extension");
-        conn.load_extension_disable()
-            .expect("disable load_extension");
-    }
-
-    apply_migrations(&conn);
+    let conn = setup_test_db(&db_path);
 
     let _: i64 = conn
         .query_row("select absurd_create_queue('alpha')", [], |r| r.get(0))
@@ -609,6 +540,25 @@ fn test_cancel_task_integration() {
         )
         .expect("run state");
     assert_eq!(run_state, "cancelled");
+
+    let _ = std::fs::remove_file(db_path);
+}
+
+#[test]
+fn test_wal_mode_enabled() {
+    let db_path = std::env::temp_dir().join(format!("absurd-test-{}.db", Uuid::new_v4()));
+    let conn = setup_test_db(&db_path);
+
+    // Verify that WAL mode is enabled
+    let journal_mode: String = conn
+        .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+        .expect("query journal_mode");
+
+    assert_eq!(
+        journal_mode.to_lowercase(),
+        "wal",
+        "WAL mode should be enabled"
+    );
 
     let _ = std::fs::remove_file(db_path);
 }
