@@ -1,0 +1,85 @@
+name: Release npm SDKs
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: typescript
+            path: sdks/typescript
+            build_command: npm run build
+            uses_bun: false
+            tag_prefix: sdks/typescript/
+          - package: bun-worker
+            path: sdks/bun-worker
+            build_command: bun run build
+            uses_bun: true
+            tag_prefix: sdks/bun-worker/
+    steps:
+      - name: Check tag prefix
+        id: tag_check
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name }}"
+          PREFIX="${{ matrix.tag_prefix }}"
+          if [[ "$TAG" == "$PREFIX"* ]]; then
+            echo "match=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "match=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Checkout
+        if: steps.tag_check.outputs.match == 'true'
+        uses: actions/checkout@v4
+      - name: Setup Node
+        if: steps.tag_check.outputs.match == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Setup Bun
+        if: steps.tag_check.outputs.match == 'true' && matrix.uses_bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - name: Install TypeScript SDK deps
+        if: steps.tag_check.outputs.match == 'true'
+        run: npm install
+        working-directory: sdks/typescript
+      - name: Install Bun worker deps
+        if: steps.tag_check.outputs.match == 'true' && matrix.uses_bun
+        run: bun install
+        working-directory: sdks/bun-worker
+      - name: Build package
+        if: steps.tag_check.outputs.match == 'true'
+        run: ${{ matrix.build_command }}
+        working-directory: ${{ matrix.path }}
+      - name: Select npm dist-tag
+        if: steps.tag_check.outputs.match == 'true'
+        id: npm_tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          # npm dist-tags are labels like "latest"/"next", not the git tag or version string.
+          if [[ "${{ github.event.release.prerelease }}" == "true" ]]; then
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish to npm (OIDC)
+        if: steps.tag_check.outputs.match == 'true'
+        # unsetting NODE_AUTH_TOKEN to make sure the wrong default from setup-node won't interfere
+        # ref: https://github.com/actions/setup-node/issues/1440
+        run: NODE_AUTH_TOKEN="" npm publish --provenance --access public --tag ${{ steps.npm_tag.outputs.tag }}
+        working-directory: ${{ matrix.path }}
