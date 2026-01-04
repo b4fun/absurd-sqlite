@@ -5,7 +5,7 @@
     "": {
       "name": "@absurd-sqlite/bun-worker",
       "dependencies": {
-        "@absurd-sqlite/sdk": "^0.2.0-alpha.3",
+        "@absurd-sqlite/sdk": "~0.2.0",
         "absurd-sdk": "~0.0.7",
       },
       "devDependencies": {
@@ -15,7 +15,7 @@
     },
   },
   "packages": {
-    "@absurd-sqlite/sdk": ["@absurd-sqlite/sdk@0.2.0-alpha.3", "", { "dependencies": { "absurd-sdk": "~0.0.7" }, "peerDependencies": { "better-sqlite3": "^12.5.0" } }, "sha512-+4VYpigwRng2O+lkNPTzNgMOXl/vEBWZcnD1NNRbNuaKYz9xO4/psssT2aCfKJ4yMffvdatV8bz2g3NbQC7OPQ=="],
+    "@absurd-sqlite/sdk": ["@absurd-sqlite/sdk@0.2.0", "", { "dependencies": { "absurd-sdk": "~0.0.7" }, "peerDependencies": { "better-sqlite3": "^12.5.0" } }, "sha512-DQVvEKK3F/+jvmbcC1dLmm9kTrGk5xn3Hhet76swHDtug/XvY8Tb+pKBjIVNvfqzxcJ+/BBv5QWbW/6qfozPHw=="],
 
     "@types/node": ["@types/node@25.0.3", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-W609buLVRVmeW693xKfzHeIV6nJGGz98uCPfeXI1ELMLXVeKYZ9m15fAMSaUPBHYLGFsVRcMmSCksQOrZV9BYA=="],
 
