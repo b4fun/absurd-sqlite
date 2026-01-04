@@ -34,7 +34,12 @@
       "icons/logo-1024x1024.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "frameworks": [
+        "./resources/libabsurd.dylib"
+      ]
+    }
   },
   "plugins": {
     "cli": {

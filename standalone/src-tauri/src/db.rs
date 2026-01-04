@@ -158,6 +158,24 @@ fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
                 "SQLite extension not found in resources at {}",
                 resource_path.display()
             );
+
+            #[cfg(target_os = "macos")]
+            {
+                let frameworks_path = resource_dir
+                    .parent()
+                    .map(|contents_dir| contents_dir.join("Frameworks").join(&lib_name));
+                if let Some(path) = frameworks_path {
+                    log::debug!("Checking Frameworks SQLite extension at {}", path.display());
+                    if path.exists() {
+                        log::info!("Using Frameworks SQLite extension at {}", path.display());
+                        return Some(path);
+                    }
+                    log::warn!(
+                        "SQLite extension not found in Frameworks at {}",
+                        path.display()
+                    );
+                }
+            }
         }
         Err(err) => log::warn!("Failed to resolve resource directory: {}", err),
     }
