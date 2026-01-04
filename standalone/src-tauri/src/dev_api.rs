@@ -359,6 +359,20 @@ fn handle_procedure(
                 Ok(serde_json::to_value(info)?)
             })
         }
+        "getTaskCheckpointStatuses" => {
+            let payload: TaskIdInput = parse_input(input)?;
+            with_provider(app_handle, |provider| {
+                let statuses = provider.get_task_checkpoint_statuses(&payload.task_id)?;
+                Ok(serde_json::to_value(statuses)?)
+            })
+        }
+        "getTaskCheckpoints" => {
+            let payload: TaskIdInput = parse_input(input)?;
+            with_provider(app_handle, |provider| {
+                let checkpoints = provider.get_task_checkpoints(&payload.task_id)?;
+                Ok(serde_json::to_value(checkpoints)?)
+            })
+        }
         "getQueueNames" => with_provider(app_handle, |provider| {
             let names = provider.get_queue_names()?;
             Ok(serde_json::to_value(names)?)

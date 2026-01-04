@@ -3,20 +3,64 @@
   import { onMount } from "svelte";
   import Button from "$lib/components/Button.svelte";
   import JsonBlock from "$lib/components/JsonBlock.svelte";
-  import { getAbsurdProvider, type TaskInfo, type TaskRun } from "$lib/providers/absurdData";
+  import {
+    getAbsurdProvider,
+    type TaskCheckpoint,
+    type TaskInfo,
+    type TaskRun,
+  } from "$lib/providers/absurdData";
 
   const provider = getAbsurdProvider();
   const taskId = $derived(page.params.taskId ?? "");
   let runs = $state<TaskRun[]>([]);
   let taskInfo = $state<TaskInfo | null>(null);
+  let taskCheckpoints = $state<TaskCheckpoint[]>([]);
   let isReady = $state(false);
   const sortedRuns = $derived([...runs].sort((a, b) => b.attemptNumber - a.attemptNumber));
   const taskName = $derived(runs[0]?.name ?? taskInfo?.name ?? "Unknown");
   const queueName = $derived(runs[0]?.queue ?? taskInfo?.queue ?? "default");
   const latestUpdatedAgo = $derived(sortedRuns[0]?.updatedAgo ?? "—");
-  const durationLabel = "8m 2s";
+  const formatDuration = (durationMs: number) => {
+    const totalSeconds = Math.floor(durationMs / 1000);
+    const days = Math.floor(totalSeconds / 86_400);
+    const hours = Math.floor((totalSeconds % 86_400) / 3_600);
+    const minutes = Math.floor((totalSeconds % 3_600) / 60);
+    const seconds = totalSeconds % 60;
+    const parts: string[] = [];
+
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0 || parts.length > 0) parts.push(`${hours}h`);
+    if (minutes > 0 || parts.length > 0) parts.push(`${minutes}m`);
+    parts.push(`${seconds}s`);
+
+    return parts.join(" ");
+  };
+  const durationLabel = $derived(
+    (() => {
+      if (runs.length === 0) return "—";
+      const createdValues = runs.map((run) => run.createdAtMs).filter(Number.isFinite);
+      const updatedValues = runs.map((run) => run.updatedAtMs).filter(Number.isFinite);
+      if (createdValues.length === 0 || updatedValues.length === 0) return "—";
+      const minCreated = Math.min(...createdValues);
+      const maxUpdated = Math.max(...updatedValues);
+      if (!Number.isFinite(minCreated) || !Number.isFinite(maxUpdated)) return "—";
+      return formatDuration(Math.max(0, maxUpdated - minCreated));
+    })()
+  );
   const completionLabel = $derived(
     runs.some((run) => run.status === "completed") ? "Completed" : "Not completed"
+  );
+  const checkpointCountLabel = $derived(
+    taskInfo ? taskInfo.checkpointCount.toString() : "—"
+  );
+  const checkpointsByRunId = $derived(
+    taskCheckpoints.reduce<Map<string, TaskCheckpoint[]>>((map, checkpoint) => {
+      const runId = checkpoint.ownerRunId ?? "unowned";
+      const entry = map.get(runId) ?? [];
+      entry.push(checkpoint);
+      map.set(runId, entry);
+      return map;
+    }, new Map())
   );
 
   const statusStyles: Record<TaskRun["status"], string> = {
@@ -27,19 +71,16 @@
     pending: "border-sky-200 bg-sky-50 text-sky-700",
     cancelled: "border-zinc-200 bg-zinc-50 text-zinc-600",
   };
-
   const refreshRuns = async () => {
     if (!taskId) {
       runs = [];
       taskInfo = null;
+      taskCheckpoints = [];
       return;
     }
     runs = await provider.getTaskHistory(taskId);
-    if (runs.length === 0) {
-      taskInfo = await provider.getTaskInfo(taskId);
-    } else {
-      taskInfo = null;
-    }
+    taskInfo = await provider.getTaskInfo(taskId);
+    taskCheckpoints = await provider.getTaskCheckpoints(taskId);
   };
 
   $effect(() => {
@@ -107,7 +148,7 @@
     </div>
     <div class="flex items-center gap-2">
       <span class="text-slate-500">Checkpoints</span>
-      <span class="font-medium text-slate-900">0</span>
+      <span class="font-medium text-slate-900">{checkpointCountLabel}</span>
     </div>
     <div class="flex items-center gap-2">
       <span class="text-slate-500">Updated</span>
@@ -140,6 +181,24 @@
           <div><span class="text-slate-400">Attempt:</span> {run.attemptNumber}</div>
           <div><span class="text-slate-400">Created:</span> {run.createdAgo}</div>
           <div><span class="text-slate-400">Updated:</span> {run.updatedAgo}</div>
+        </div>
+        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <span class="text-slate-400">Checkpoints:</span>
+          {#if checkpointsByRunId.get(run.runId)?.length}
+            {#each checkpointsByRunId.get(run.runId) ?? [] as checkpoint}
+              <span
+                class={`rounded-full border px-2 py-0.5 text-xs font-medium ${
+                  checkpoint.status === "committed"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-slate-200 bg-slate-50 text-slate-700"
+                }`}
+              >
+                {checkpoint.name}
+              </span>
+            {/each}
+          {:else}
+            <span class="text-slate-400">—</span>
+          {/if}
         </div>
 
         <div class="mt-4">

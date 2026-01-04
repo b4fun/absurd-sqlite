@@ -28,6 +28,8 @@ export type TaskRun = {
   age: string;
   startedAt: string;
   updatedAt: string;
+  createdAtMs: number;
+  updatedAtMs: number;
   createdAgo: string;
   updatedAgo: string;
   paramsSummary: string;
@@ -40,6 +42,19 @@ export type TaskInfo = {
   id: string;
   name: string;
   queue: string;
+  checkpointCount: number;
+};
+
+export type CheckpointStatusCount = {
+  status: string;
+  count: number;
+};
+
+export type TaskCheckpoint = {
+  name: string;
+  status: string;
+  ownerRunId: string | null;
+  updatedAt: string;
 };
 
 export type TaskRunFilters = {
@@ -138,6 +153,8 @@ export type AbsurdDataProvider = {
   getTaskRunsPage: (filters: TaskRunFilters) => Promise<TaskRunPage>;
   getTaskHistory: (taskId: string) => Promise<TaskRun[]>;
   getTaskInfo: (taskId: string) => Promise<TaskInfo | null>;
+  getTaskCheckpointStatuses: (taskId: string) => Promise<CheckpointStatusCount[]>;
+  getTaskCheckpoints: (taskId: string) => Promise<TaskCheckpoint[]>;
   getQueueNames: () => Promise<string[]>;
   getTaskNameOptions: (queueName?: string) => Promise<string[]>;
   getQueueSummaries: () => Promise<QueueSummary[]>;
@@ -174,6 +191,9 @@ export const tauriAbsurdProvider: AbsurdDataProvider = {
   getTaskRunsPage: (filters) => tauriInvoke("get_task_runs_page", { filters }),
   getTaskHistory: (taskId) => tauriInvoke("get_task_history", { taskId }),
   getTaskInfo: (taskId) => tauriInvoke("get_task_info", { taskId }),
+  getTaskCheckpointStatuses: (taskId) =>
+    tauriInvoke("get_task_checkpoint_statuses", { taskId }),
+  getTaskCheckpoints: (taskId) => tauriInvoke("get_task_checkpoints", { taskId }),
   getQueueNames: () => tauriInvoke("get_queue_names"),
   getTaskNameOptions: (queueName) =>
     tauriInvoke("get_task_name_options", { queue_name: queueName ?? null }),
@@ -353,6 +373,9 @@ const trpcAbsurdProvider: AbsurdDataProvider = {
   getTaskRunsPage: (filters) => trpcQuery("getTaskRunsPage", filters),
   getTaskHistory: (taskId) => trpcQuery("getTaskHistory", { taskId }),
   getTaskInfo: (taskId) => trpcQuery("getTaskInfo", { taskId }),
+  getTaskCheckpointStatuses: (taskId) =>
+    trpcQuery("getTaskCheckpointStatuses", { taskId }),
+  getTaskCheckpoints: (taskId) => trpcQuery("getTaskCheckpoints", { taskId }),
   getQueueNames: () => trpcQuery("getQueueNames"),
   getTaskNameOptions: (queueName) =>
     trpcQuery("getTaskNameOptions", queueName ? { queueName } : null),
@@ -419,6 +442,8 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
       age: "5d",
       startedAt: "Dec 22, 2025, 9:13 AM",
       updatedAt: "Dec 27, 2025, 3:03 PM",
+      createdAtMs: Date.parse("Dec 22, 2025, 9:13 AM"),
+      updatedAtMs: Date.parse("Dec 27, 2025, 3:03 PM"),
       createdAgo: "5d ago",
       updatedAgo: "5d ago",
       paramsSummary: "{ \"tenant\": \"absurd\", \"retries\": 4 }",
@@ -436,6 +461,8 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
       age: "5d",
       startedAt: "Dec 22, 2025, 9:03 AM",
       updatedAt: "Dec 22, 2025, 9:05 AM",
+      createdAtMs: Date.parse("Dec 22, 2025, 9:03 AM"),
+      updatedAtMs: Date.parse("Dec 22, 2025, 9:05 AM"),
       createdAgo: "5d ago",
       updatedAgo: "5d ago",
       paramsSummary: "{ \"tenant\": \"absurd\", \"retries\": 3 }",
@@ -455,6 +482,8 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
       age: "5d",
       startedAt: "Dec 22, 2025, 9:01 AM",
       updatedAt: "Dec 22, 2025, 9:03 AM",
+      createdAtMs: Date.parse("Dec 22, 2025, 9:01 AM"),
+      updatedAtMs: Date.parse("Dec 22, 2025, 9:03 AM"),
       createdAgo: "5d ago",
       updatedAgo: "5d ago",
       paramsSummary: "{ \"tenant\": \"absurd\", \"retries\": 2 }",
@@ -474,6 +503,8 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
       age: "5d",
       startedAt: "Dec 22, 2025, 8:59 AM",
       updatedAt: "Dec 22, 2025, 9:01 AM",
+      createdAtMs: Date.parse("Dec 22, 2025, 8:59 AM"),
+      updatedAtMs: Date.parse("Dec 22, 2025, 9:01 AM"),
       createdAgo: "5d ago",
       updatedAgo: "5d ago",
       paramsSummary: "{ \"tenant\": \"absurd\", \"retries\": 1 }",
@@ -493,6 +524,8 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
       age: "5d",
       startedAt: "Dec 22, 2025, 8:57 AM",
       updatedAt: "Dec 22, 2025, 8:59 AM",
+      createdAtMs: Date.parse("Dec 22, 2025, 8:57 AM"),
+      updatedAtMs: Date.parse("Dec 22, 2025, 8:59 AM"),
       createdAgo: "5d ago",
       updatedAgo: "5d ago",
       paramsSummary: "{ \"tenant\": \"absurd\", \"retries\": 0 }",
@@ -512,6 +545,8 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
       age: "5d",
       startedAt: "Dec 22, 2025, 8:20 AM",
       updatedAt: "Dec 22, 2025, 8:21 AM",
+      createdAtMs: Date.parse("Dec 22, 2025, 8:20 AM"),
+      updatedAtMs: Date.parse("Dec 22, 2025, 8:21 AM"),
       createdAgo: "5d ago",
       updatedAgo: "5d ago",
       paramsSummary: "{ \"source\": \"nightly\" }",
@@ -529,6 +564,8 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
       age: "5d",
       startedAt: "Dec 22, 2025, 7:10 AM",
       updatedAt: "Dec 22, 2025, 7:12 AM",
+      createdAtMs: Date.parse("Dec 22, 2025, 7:10 AM"),
+      updatedAtMs: Date.parse("Dec 22, 2025, 7:12 AM"),
       createdAgo: "5d ago",
       updatedAgo: "5d ago",
       paramsSummary: "{ \"stage\": \"backoff\" }",
@@ -587,8 +624,10 @@ export const mockAbsurdProvider: AbsurdDataProvider = {
     if (!run) {
       return null;
     }
-    return { id: run.id, name: run.name, queue: run.queue };
+    return { id: run.id, name: run.name, queue: run.queue, checkpointCount: 0 };
   },
+  getTaskCheckpointStatuses: async () => [],
+  getTaskCheckpoints: async () => [],
   getQueueSummaries: async () => [
     {
       name: "default",

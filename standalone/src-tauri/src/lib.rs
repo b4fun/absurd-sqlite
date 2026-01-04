@@ -38,6 +38,8 @@ pub fn run() {
             db_commands::get_task_runs_page,
             db_commands::get_task_history,
             db_commands::get_task_info,
+            db_commands::get_task_checkpoint_statuses,
+            db_commands::get_task_checkpoints,
             db_commands::get_queue_names,
             db_commands::get_queue_summaries,
             db_commands::create_queue,

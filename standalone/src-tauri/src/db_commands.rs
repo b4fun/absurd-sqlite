@@ -55,6 +55,8 @@ pub struct TaskRun {
     pub age: String,
     pub started_at: String,
     pub updated_at: String,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
     pub created_ago: String,
     pub updated_ago: String,
     pub params_summary: String,
@@ -69,6 +71,23 @@ pub struct TaskInfo {
     pub id: String,
     pub name: String,
     pub queue: String,
+    pub checkpoint_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckpointStatusCount {
+    pub status: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskCheckpoint {
+    pub name: String,
+    pub status: String,
+    pub owner_run_id: Option<String>,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -488,18 +507,68 @@ impl<'a> TauriDataProvider<'a> {
     pub fn get_task_info(&self, task_id: &str) -> Result<Option<TaskInfo>> {
         self.conn
             .query_row(
-                "select task_id, task_name, queue_name from absurd_tasks where task_id = ?",
+                "select
+                    t.task_id,
+                    t.task_name,
+                    t.queue_name,
+                    (select count(*) from absurd_checkpoints c where c.task_id = t.task_id and c.queue_name = t.queue_name)
+                 from absurd_tasks t
+                 where t.task_id = ?",
                 [task_id],
                 |row| {
                     Ok(TaskInfo {
                         id: row.get(0)?,
                         name: row.get(1)?,
                         queue: row.get(2)?,
+                        checkpoint_count: row.get(3)?,
                     })
                 },
             )
             .optional()
             .map_err(Into::into)
+    }
+
+    pub fn get_task_checkpoint_statuses(
+        &self,
+        task_id: &str,
+    ) -> Result<Vec<CheckpointStatusCount>> {
+        let mut stmt = self.conn.prepare(
+            "select coalesce(status, 'unknown') as status, count(*)
+             from absurd_checkpoints
+             where task_id = ?
+             group by status
+             order by status",
+        )?;
+
+        let rows = stmt.query_map([task_id], |row| {
+            Ok(CheckpointStatusCount {
+                status: row.get(0)?,
+                count: row.get(1)?,
+            })
+        })?;
+
+        Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+    }
+
+    pub fn get_task_checkpoints(&self, task_id: &str) -> Result<Vec<TaskCheckpoint>> {
+        let mut stmt = self.conn.prepare(
+            "select checkpoint_name, coalesce(status, 'unknown'), owner_run_id, updated_at
+             from absurd_checkpoints
+             where task_id = ?
+             order by updated_at desc",
+        )?;
+
+        let rows = stmt.query_map([task_id], |row| {
+            let updated_at: i64 = row.get(3)?;
+            Ok(TaskCheckpoint {
+                name: row.get(0)?,
+                status: row.get(1)?,
+                owner_run_id: row.get(2)?,
+                updated_at: format_datetime(updated_at),
+            })
+        })?;
+
+        Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
     }
 
     pub fn get_queue_summaries(&self) -> Result<Vec<QueueSummary>> {
@@ -931,6 +1000,8 @@ fn map_task_run_row(row: &rusqlite::Row<'_>, now_ms: i64) -> rusqlite::Result<Ta
         age: format_age_short(now_ms - created_at),
         started_at: format_datetime(started_at),
         updated_at: format_datetime(updated_at),
+        created_at_ms: created_at,
+        updated_at_ms: updated_at,
         created_ago: format_age_ago(now_ms - created_at),
         updated_ago: format_age_ago(now_ms - updated_at),
         params_summary,
@@ -1207,6 +1278,28 @@ pub fn get_task_info(
 ) -> Result<Option<TaskInfo>, String> {
     with_provider(&app_handle, &db_handle, |provider| {
         provider.get_task_info(&task_id)
+    })
+}
+
+#[tauri::command]
+pub fn get_task_checkpoint_statuses(
+    task_id: String,
+    app_handle: AppHandle,
+    db_handle: State<DatabaseHandle>,
+) -> Result<Vec<CheckpointStatusCount>, String> {
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_task_checkpoint_statuses(&task_id)
+    })
+}
+
+#[tauri::command]
+pub fn get_task_checkpoints(
+    task_id: String,
+    app_handle: AppHandle,
+    db_handle: State<DatabaseHandle>,
+) -> Result<Vec<TaskCheckpoint>, String> {
+    with_provider(&app_handle, &db_handle, |provider| {
+        provider.get_task_checkpoints(&task_id)
     })
 }
 
