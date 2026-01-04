@@ -140,6 +140,27 @@ fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
         }
     }
 
+    #[cfg(target_os = "macos")]
+    {
+        // NOTE: On macOS, try to load from Frameworks first as the library is signed / notarized there
+        if let Ok(resource_dir) = app_handle.path().resource_dir() {
+            let frameworks_path = resource_dir
+                .parent()
+                .map(|contents_dir| contents_dir.join("Frameworks").join(&lib_name));
+            if let Some(path) = frameworks_path {
+                log::debug!("Checking Frameworks SQLite extension at {}", path.display());
+                if path.exists() {
+                    log::info!("Using Frameworks SQLite extension at {}", path.display());
+                    return Some(path);
+                }
+                log::warn!(
+                    "SQLite extension not found in Frameworks at {}",
+                    path.display()
+                );
+            }
+        }
+    }
+
     match app_handle.path().resource_dir() {
         Ok(resource_dir) => {
             let resource_path = resource_dir.join("resources").join(&lib_name);
@@ -158,24 +179,6 @@ fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
                 "SQLite extension not found in resources at {}",
                 resource_path.display()
             );
-
-            #[cfg(target_os = "macos")]
-            {
-                let frameworks_path = resource_dir
-                    .parent()
-                    .map(|contents_dir| contents_dir.join("Frameworks").join(&lib_name));
-                if let Some(path) = frameworks_path {
-                    log::debug!("Checking Frameworks SQLite extension at {}", path.display());
-                    if path.exists() {
-                        log::info!("Using Frameworks SQLite extension at {}", path.display());
-                        return Some(path);
-                    }
-                    log::warn!(
-                        "SQLite extension not found in Frameworks at {}",
-                        path.display()
-                    );
-                }
-            }
         }
         Err(err) => log::warn!("Failed to resolve resource directory: {}", err),
     }
