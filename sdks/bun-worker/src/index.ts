@@ -1,12 +1,15 @@
 import { Absurd } from "absurd-sdk";
 import { Database } from "bun:sqlite";
+import type { AbsurdClient } from "@absurd-sqlite/sdk";
 
 import { BunSqliteConnection } from "./sqlite";
+
+export type { AbsurdClient } from "@absurd-sqlite/sdk";
 
 /**
  * Register tasks and perform any one-time setup before the worker starts.
  */
-export type SetupFunction = (absurd: Absurd) => void | Promise<void>;
+export type SetupFunction = (absurd: AbsurdClient) => void | Promise<void>;
 
 /**
  * Boots a worker using Bun's SQLite driver and Absurd's task engine.
@@ -15,9 +18,7 @@ export type SetupFunction = (absurd: Absurd) => void | Promise<void>;
  * - ABSURD_DATABASE_PATH: SQLite database file path.
  * - ABSURD_DATABASE_EXTENSION_PATH: Absurd-SQLite extension path (libabsurd.*).
  */
-export default async function run(
-  setupFunction: SetupFunction
-): Promise<void> {
+export default async function run(setupFunction: SetupFunction): Promise<void> {
   const dbPath = process.env.ABSURD_DATABASE_PATH;
   const extensionPath = process.env.ABSURD_DATABASE_EXTENSION_PATH;
 
