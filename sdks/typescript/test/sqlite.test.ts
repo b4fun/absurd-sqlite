@@ -1,5 +1,8 @@
 import sqlite from "better-sqlite3";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import { SqliteConnection } from "../src/sqlite";
 import type { SQLiteDatabase } from "../src/sqlite-types";
@@ -81,5 +84,78 @@ describe("SqliteConnection", () => {
     expect(rows[0]?.created_at).toBeInstanceOf(Date);
     expect(rows[0]?.created_at.getTime()).toBe(now);
     db.close();
+  });
+
+  it("retries when SQLite reports the database is busy", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "absurd-sqlite-busy-"));
+    const dbPath = join(tempDir, "busy.db");
+    const primary = new sqlite(dbPath) as unknown as SQLiteDatabase;
+    (primary as any).pragma("busy_timeout = 1");
+    const conn = new SqliteConnection(primary);
+    await conn.exec("CREATE TABLE t_busy (id INTEGER PRIMARY KEY, value TEXT)");
+
+    const blocker = new sqlite(dbPath);
+    blocker.pragma("busy_timeout = 1");
+    blocker.exec("BEGIN EXCLUSIVE");
+
+    let released = false;
+    const releaseLock = () => {
+      if (released) return;
+      released = true;
+      try {
+        blocker.exec("COMMIT");
+      } catch (err) {
+        // Ignore if the transaction was already closed.
+      }
+      blocker.close();
+    };
+    const timer = setTimeout(releaseLock, 50);
+
+    try {
+      await conn.exec("INSERT INTO t_busy (value) VALUES ($1)", ["alpha"]);
+      const { rows } = await conn.query<{ value: string }>(
+        "SELECT value FROM t_busy"
+      );
+      expect(rows[0]?.value).toBe("alpha");
+    } finally {
+      clearTimeout(timer);
+      releaseLock();
+      primary.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("retries on locked error codes from SQLite", async () => {
+    const lockedError = new Error("SQLITE_LOCKED: mock lock") as any;
+    lockedError.code = "SQLITE_LOCKED_SHAREDCACHE";
+    lockedError.errno = 6;
+
+    let attempts = 0;
+    const statement = {
+      readonly: false,
+      columns: vi.fn().mockReturnValue([]),
+      all: vi.fn(),
+      run: vi.fn(() => {
+        attempts++;
+        if (attempts === 1) {
+          throw lockedError;
+        }
+        return 1;
+      }),
+    };
+
+    const prepareSpy = vi.fn().mockReturnValue(statement as any);
+    const db: SQLiteDatabase = {
+      prepare: prepareSpy as any,
+      close: vi.fn(),
+      loadExtension: vi.fn(),
+    };
+    const conn = new SqliteConnection(db);
+
+    await expect(
+      conn.exec("UPDATE locked_table SET value = $1 WHERE id = $2", [1, 1])
+    ).resolves.toBeUndefined();
+    expect(statement.run).toHaveBeenCalledTimes(2);
+    expect(prepareSpy).toHaveBeenCalledTimes(1);
   });
 });

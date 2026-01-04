@@ -8,6 +8,8 @@ import type {
 
 export class SqliteConnection implements Queryable {
   private readonly db: SQLiteDatabase;
+  private readonly maxRetries = 5;
+  private readonly baseRetryDelayMs = 50;
 
   constructor(db: SQLiteDatabase) {
     this.db = db;
@@ -28,9 +30,11 @@ export class SqliteConnection implements Queryable {
       throw new Error("The query() method is only statements that return data");
     }
 
-    const rowsDecoded = statement
-      .all(sqliteParams)
-      .map((row) => decodeRowValues(statement, row));
+    const rowsDecoded = await this.runWithRetry(() =>
+      statement
+        .all(sqliteParams)
+        .map((row) => decodeRowValues(statement, row))
+    );
 
     return { rows: rowsDecoded };
   }
@@ -39,7 +43,23 @@ export class SqliteConnection implements Queryable {
     const sqliteQuery = rewritePostgresQuery(sql);
     const sqliteParams = rewritePostgresParams(params);
 
-    this.db.prepare(sqliteQuery).run(sqliteParams);
+    const statement = this.db.prepare(sqliteQuery);
+    await this.runWithRetry(() => statement.run(sqliteParams));
+  }
+
+  private async runWithRetry<T>(operation: () => T): Promise<T> {
+    let attempt = 0;
+    while (true) {
+      try {
+        return operation();
+      } catch (err) {
+        if (!isRetryableSQLiteError(err) || attempt >= this.maxRetries) {
+          throw err;
+        }
+        attempt++;
+        await delay(this.baseRetryDelayMs * attempt);
+      }
+    }
   }
 }
 
@@ -159,4 +179,33 @@ function encodeColumnValue(value: any): any {
     return value.toString();
   }
   return value;
+}
+
+const sqliteRetryableErrorCodes = new Set(["SQLITE_BUSY", "SQLITE_LOCKED"]);
+const sqliteRetryableErrnos = new Set([5, 6]);
+
+function isRetryableSQLiteError(err: unknown): boolean {
+  if (!err || typeof err !== "object") {
+    return false;
+  }
+
+  const code = (err as any).code;
+  if (typeof code === "string") {
+    for (const retryableCode of sqliteRetryableErrorCodes) {
+      if (code.startsWith(retryableCode)) {
+        return true;
+      }
+    }
+  }
+
+  const errno = (err as any).errno;
+  if (typeof errno === "number" && sqliteRetryableErrnos.has(errno)) {
+    return true;
+  }
+
+  return false;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
