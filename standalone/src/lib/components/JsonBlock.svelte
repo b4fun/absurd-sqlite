@@ -49,7 +49,7 @@
     </Button>
   </div>
   {#if formattedValue}
-    <pre class="whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">
+    <pre class="inline-block max-w-full whitespace-pre-wrap bg-white px-3 py-3 font-mono text-xs text-slate-700">
 {formattedValue}
     </pre>
   {:else}
