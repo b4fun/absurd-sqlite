@@ -57,10 +57,13 @@ afterEach(() => {
 
 describe("run", () => {
   it("requires ABSURD_DATABASE_PATH", async () => {
+    process.env.ABSURD_DATABASE_PATH = "";
     process.env.ABSURD_DATABASE_EXTENSION_PATH = extensionPath;
     const { default: run } = await import("../src/index");
 
-    await expect(run(() => {})).rejects.toThrow("ABSURD_DATABASE_PATH is required");
+    await expect(run(() => {})).rejects.toThrow(
+      "ABSURD_DATABASE_PATH is required"
+    );
   });
 
   it("requires ABSURD_DATABASE_EXTENSION_PATH", async () => {
