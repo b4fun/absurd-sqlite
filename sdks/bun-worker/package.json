@@ -1,6 +1,6 @@
 {
   "name": "@absurd-sqlite/bun-worker",
-  "version": "0.1.0",
+  "version": "0.1.0.alpha.0",
   "description": "Bun worker utilities for Absurd-Sqlite",
   "type": "module",
   "main": "dist/index.js",
@@ -38,7 +38,7 @@
   },
   "homepage": "https://github.com/b4fun/absurd-sqlite#readme",
   "dependencies": {
-    "@absurd-sqlite/sdk": "file:../typescript",
+    "@absurd-sqlite/sdk": "~0.2.0-alpha.3",
     "absurd-sdk": "~0.0.7"
   },
   "devDependencies": {
