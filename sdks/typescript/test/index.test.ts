@@ -89,4 +89,16 @@ describe("Absurd", () => {
     expect(ok).toBe(1);
     db.close();
   });
+
+  it("creates instance with explicit extension path using create()", async () => {
+    const dbPath = createDatabaseWithMigrations();
+    const db = new sqlite(dbPath) as unknown as SQLiteDatabase;
+    const absurd = await Absurd.create(db, { extensionPath });
+
+    await absurd.createQueue("test");
+    const queues = await absurd.listQueues();
+    expect(queues).toContain("test");
+
+    await absurd.close();
+  });
 });
