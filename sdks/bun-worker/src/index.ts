@@ -149,36 +149,50 @@ function parseCliArgs(): Partial<WorkerOptions> {
 
     const options: Partial<WorkerOptions> = {};
 
-    if (values.concurrency && typeof values.concurrency === "string") {
-      const concurrency = parseInt(values.concurrency, 10);
-      if (!isNaN(concurrency) && concurrency > 0) {
-        options.concurrency = concurrency;
+    const parsePositiveInt = (value: unknown, fieldName: string): number | undefined => {
+      if (typeof value === "string") {
+        const parsed = parseInt(value, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+          return parsed;
+        }
+        console.warn(`Invalid value for ${fieldName}: "${value}" (must be a positive integer)`);
       }
+      return undefined;
+    };
+
+    const parsePositiveFloat = (value: unknown, fieldName: string): number | undefined => {
+      if (typeof value === "string") {
+        const parsed = parseFloat(value);
+        if (!isNaN(parsed) && parsed > 0) {
+          return parsed;
+        }
+        console.warn(`Invalid value for ${fieldName}: "${value}" (must be a positive number)`);
+      }
+      return undefined;
+    };
+
+    const concurrency = parsePositiveInt(values.concurrency, "--concurrency");
+    if (concurrency !== undefined) {
+      options.concurrency = concurrency;
     }
 
-    if (values["poll-interval"] && typeof values["poll-interval"] === "string") {
-      const pollInterval = parseFloat(values["poll-interval"]);
-      if (!isNaN(pollInterval) && pollInterval > 0) {
-        options.pollInterval = pollInterval;
-      }
+    const pollInterval = parsePositiveFloat(values["poll-interval"], "--poll-interval");
+    if (pollInterval !== undefined) {
+      options.pollInterval = pollInterval;
     }
 
     if (values["worker-id"] && typeof values["worker-id"] === "string") {
       options.workerId = values["worker-id"];
     }
 
-    if (values["claim-timeout"] && typeof values["claim-timeout"] === "string") {
-      const claimTimeout = parseInt(values["claim-timeout"], 10);
-      if (!isNaN(claimTimeout) && claimTimeout > 0) {
-        options.claimTimeout = claimTimeout;
-      }
+    const claimTimeout = parsePositiveInt(values["claim-timeout"], "--claim-timeout");
+    if (claimTimeout !== undefined) {
+      options.claimTimeout = claimTimeout;
     }
 
-    if (values["batch-size"] && typeof values["batch-size"] === "string") {
-      const batchSize = parseInt(values["batch-size"], 10);
-      if (!isNaN(batchSize) && batchSize > 0) {
-        options.batchSize = batchSize;
-      }
+    const batchSize = parsePositiveInt(values["batch-size"], "--batch-size");
+    if (batchSize !== undefined) {
+      options.batchSize = batchSize;
     }
 
     if (values["fatal-on-lease-timeout"]) {
@@ -188,7 +202,10 @@ function parseCliArgs(): Partial<WorkerOptions> {
     return options;
   } catch (err) {
     // If parseArgs fails, return empty options
-    console.error("Failed to parse CLI arguments:", err);
+    console.error(
+      "Failed to parse CLI arguments. Please check the command-line flags and refer to the documentation.",
+      err
+    );
     return {};
   }
 }
