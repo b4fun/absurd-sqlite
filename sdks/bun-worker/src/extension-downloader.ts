@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -139,13 +139,10 @@ async function downloadAsset(
   }
 
   const buffer = await response.arrayBuffer();
-  const file = Bun.file(destPath);
-  await Bun.write(file, buffer);
 
-  // Make the extension executable on Unix-like systems
-  if (process.platform !== "win32") {
-    await Bun.write(destPath, buffer, { mode: 0o755 });
-  }
+  // Write file with executable permissions on Unix-like systems
+  const mode = process.platform !== "win32" ? 0o755 : undefined;
+  await Bun.write(destPath, buffer, mode ? { mode } : undefined);
 }
 
 function getCachedPath(
