@@ -32,11 +32,11 @@ describe("downloadExtension", () => {
     // Verify it has the right extension
     const platform = process.platform;
     if (platform === "darwin") {
-      expect(extensionPath).toMatch(/\.dylib$/);
+      expect(extensionPath).toMatch(/libabsurd\.dylib$/);
     } else if (platform === "linux") {
-      expect(extensionPath).toMatch(/\.so$/);
+      expect(extensionPath).toMatch(/libabsurd\.so$/);
     } else if (platform === "win32") {
-      expect(extensionPath).toMatch(/\.dll$/);
+      expect(extensionPath).toMatch(/libabsurd\.dll$/);
     }
   }, 60000);
 

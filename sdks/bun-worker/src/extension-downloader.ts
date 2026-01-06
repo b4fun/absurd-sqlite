@@ -150,8 +150,9 @@ function getCachedPath(
   version: string,
   platform: PlatformInfo
 ): string {
-  const assetName = getAssetName(version, platform);
-  return join(cacheDir, version, assetName);
+  // Use a consistent name that SQLite expects: libabsurd.{ext}
+  const ext = platform.ext;
+  return join(cacheDir, version, `libabsurd.${ext}`);
 }
 
 /**
