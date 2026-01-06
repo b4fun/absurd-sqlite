@@ -5,6 +5,16 @@ import { join } from "node:path";
 
 configureBunSqlite();
 
+// The worker now supports CLI flags for configuration:
+// --concurrency (-c): Number of concurrent tasks (default: 10)
+// --poll-interval: Polling interval in seconds (default: 5)
+// --worker-id: Worker identifier
+// --claim-timeout: Claim timeout in seconds (default: 60)
+// --batch-size: Number of tasks to claim per batch
+// --fatal-on-lease-timeout: Exit if lease timeout occurs
+//
+// Example: bun run src/index.ts --concurrency 5 --poll-interval 10
+
 await run(async (absurd) => {
   await absurd.createQueue("default");
 
