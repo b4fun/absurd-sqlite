@@ -149,32 +149,32 @@ function parseCliArgs(): Partial<WorkerOptions> {
 
     const options: Partial<WorkerOptions> = {};
 
-    if (values.concurrency) {
+    if (values.concurrency && typeof values.concurrency === "string") {
       const concurrency = parseInt(values.concurrency, 10);
       if (!isNaN(concurrency) && concurrency > 0) {
         options.concurrency = concurrency;
       }
     }
 
-    if (values["poll-interval"]) {
+    if (values["poll-interval"] && typeof values["poll-interval"] === "string") {
       const pollInterval = parseFloat(values["poll-interval"]);
       if (!isNaN(pollInterval) && pollInterval > 0) {
         options.pollInterval = pollInterval;
       }
     }
 
-    if (values["worker-id"]) {
+    if (values["worker-id"] && typeof values["worker-id"] === "string") {
       options.workerId = values["worker-id"];
     }
 
-    if (values["claim-timeout"]) {
+    if (values["claim-timeout"] && typeof values["claim-timeout"] === "string") {
       const claimTimeout = parseInt(values["claim-timeout"], 10);
       if (!isNaN(claimTimeout) && claimTimeout > 0) {
         options.claimTimeout = claimTimeout;
       }
     }
 
-    if (values["batch-size"]) {
+    if (values["batch-size"] && typeof values["batch-size"] === "string") {
       const batchSize = parseInt(values["batch-size"], 10);
       if (!isNaN(batchSize) && batchSize > 0) {
         options.batchSize = batchSize;
