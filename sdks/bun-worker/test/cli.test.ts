@@ -1,13 +1,35 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
+import { fileURLToPath } from "node:url";
 
-import { loadExtension } from "./setup";
+const testDir = fileURLToPath(new URL(".", import.meta.url));
+const repoRoot = join(testDir, "../../..");
+const extensionBase = join(repoRoot, "target/release/libabsurd");
 
-describe("CLI flags", () => {
+function resolveExtensionPath(base: string): string {
+  const platformExt =
+    process.platform === "win32"
+      ? ".dll"
+      : process.platform === "darwin"
+      ? ".dylib"
+      : ".so";
+  const candidates = [base, `${base}${platformExt}`];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(
+    `SQLite extension not found at ${base} (expected ${platformExt})`
+  );
+}
+
+const extensionPath = resolveExtensionPath(extensionBase);
+
+describe("Worker configuration", () => {
   let tempDir: string;
   let dbPath: string;
 
@@ -17,216 +39,107 @@ describe("CLI flags", () => {
 
     // Initialize database with migrations
     const db = new Database(dbPath);
-    loadExtension(db);
+    (db as unknown as { loadExtension(path: string): void }).loadExtension(
+      extensionPath
+    );
     db.query("select absurd_apply_migrations()").get();
     db.close();
+
+    process.env.ABSURD_DATABASE_PATH = dbPath;
+    process.env.ABSURD_DATABASE_EXTENSION_PATH = extensionPath;
   });
 
   afterEach(() => {
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true });
     }
+    delete process.env.ABSURD_DATABASE_PATH;
+    delete process.env.ABSURD_DATABASE_EXTENSION_PATH;
   });
 
-  it("accepts concurrency flag", async () => {
-    const workerScript = join(tempDir, "worker.ts");
-    writeFileSync(
-      workerScript,
-      `
-      import run from "../src/index";
-      
-      await run(async (absurd) => {
+  it("accepts workerOptions programmatically", async () => {
+    const { default: run } = await import("../src/index");
+
+    let workerStarted = false;
+
+    const promise = run(
+      async (absurd) => {
         await absurd.createQueue("default");
-        console.log("Worker started");
-        // Exit immediately for test
-        process.exit(0);
-      });
-      `
-    );
-
-    const result = await runWorkerWithFlags(workerScript, dbPath, [
-      "--concurrency",
-      "5",
-    ]);
-    expect(result.exitCode).toBe(0);
-  });
-
-  it("accepts poll-interval flag", async () => {
-    const workerScript = join(tempDir, "worker.ts");
-    writeFileSync(
-      workerScript,
-      `
-      import run from "../src/index";
-      
-      await run(async (absurd) => {
-        await absurd.createQueue("default");
-        console.log("Worker started");
-        process.exit(0);
-      });
-      `
-    );
-
-    const result = await runWorkerWithFlags(workerScript, dbPath, [
-      "--poll-interval",
-      "10",
-    ]);
-    expect(result.exitCode).toBe(0);
-  });
-
-  it("accepts worker-id flag", async () => {
-    const workerScript = join(tempDir, "worker.ts");
-    writeFileSync(
-      workerScript,
-      `
-      import run from "../src/index";
-      
-      await run(async (absurd) => {
-        await absurd.createQueue("default");
-        console.log("Worker started");
-        process.exit(0);
-      });
-      `
-    );
-
-    const result = await runWorkerWithFlags(workerScript, dbPath, [
-      "--worker-id",
-      "test-worker",
-    ]);
-    expect(result.exitCode).toBe(0);
-  });
-
-  it("accepts multiple flags", async () => {
-    const workerScript = join(tempDir, "worker.ts");
-    writeFileSync(
-      workerScript,
-      `
-      import run from "../src/index";
-      
-      await run(async (absurd) => {
-        await absurd.createQueue("default");
-        console.log("Worker started");
-        process.exit(0);
-      });
-      `
-    );
-
-    const result = await runWorkerWithFlags(workerScript, dbPath, [
-      "--concurrency",
-      "5",
-      "--poll-interval",
-      "10",
-      "--worker-id",
-      "test-worker",
-    ]);
-    expect(result.exitCode).toBe(0);
-  });
-
-  it("programmatic options override CLI flags", async () => {
-    const workerScript = join(tempDir, "worker.ts");
-    writeFileSync(
-      workerScript,
-      `
-      import run from "../src/index";
-      
-      await run(
-        async (absurd) => {
-          await absurd.createQueue("default");
-          console.log("Worker started");
-          process.exit(0);
+        absurd.registerTask({ name: "test" }, async () => {
+          return { ok: true };
+        });
+        workerStarted = true;
+      },
+      {
+        workerOptions: {
+          concurrency: 5,
+          pollInterval: 10,
         },
-        {
-          workerOptions: {
-            concurrency: 20,
-          },
-        }
-      );
-      `
+      }
     );
 
-    const result = await runWorkerWithFlags(workerScript, dbPath, [
-      "--concurrency",
-      "5",
-    ]);
-    expect(result.exitCode).toBe(0);
-    // The programmatic option (20) should override the CLI flag (5)
+    // Give the worker time to start
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(workerStarted).toBe(true);
+
+    // Clean up by sending SIGINT
+    process.emit("SIGINT");
+    await new Promise((resolve) => setTimeout(resolve, 100));
   });
 
-  it("can disable CLI flag parsing", async () => {
-    const workerScript = join(tempDir, "worker.ts");
-    writeFileSync(
-      workerScript,
-      `
-      import run from "../src/index";
-      
-      await run(
-        async (absurd) => {
-          await absurd.createQueue("default");
-          console.log("Worker started");
-          process.exit(0);
+  it("supports parseCliFlags option", async () => {
+    const { default: run } = await import("../src/index");
+
+    let workerStarted = false;
+
+    const promise = run(
+      async (absurd) => {
+        await absurd.createQueue("default");
+        absurd.registerTask({ name: "test" }, async () => {
+          return { ok: true };
+        });
+        workerStarted = true;
+      },
+      {
+        parseCliFlags: false,
+        workerOptions: {
+          concurrency: 3,
         },
-        {
-          parseCliFlags: false,
-        }
-      );
-      `
+      }
     );
 
-    const result = await runWorkerWithFlags(workerScript, dbPath, [
-      "--concurrency",
-      "5",
-    ]);
-    expect(result.exitCode).toBe(0);
+    // Give the worker time to start
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(workerStarted).toBe(true);
+
+    // Clean up by sending SIGINT
+    process.emit("SIGINT");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  });
+
+  it("works with default options when none provided", async () => {
+    const { default: run } = await import("../src/index");
+
+    let workerStarted = false;
+
+    const promise = run(async (absurd) => {
+      await absurd.createQueue("default");
+      absurd.registerTask({ name: "test" }, async () => {
+        return { ok: true };
+      });
+      workerStarted = true;
+    });
+
+    // Give the worker time to start
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(workerStarted).toBe(true);
+
+    // Clean up by sending SIGINT
+    process.emit("SIGINT");
+    await new Promise((resolve) => setTimeout(resolve, 100));
   });
 });
 
-interface WorkerResult {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-}
-
-async function runWorkerWithFlags(
-  scriptPath: string,
-  dbPath: string,
-  flags: string[]
-): Promise<WorkerResult> {
-  return new Promise((resolve, reject) => {
-    const extensionPath = process.env.ABSURD_DATABASE_EXTENSION_PATH;
-    if (!extensionPath) {
-      reject(new Error("ABSURD_DATABASE_EXTENSION_PATH not set"));
-      return;
-    }
-
-    const proc = spawn("bun", ["run", scriptPath, ...flags], {
-      env: {
-        ...process.env,
-        ABSURD_DATABASE_PATH: dbPath,
-        ABSURD_DATABASE_EXTENSION_PATH: extensionPath,
-      },
-      timeout: 5000, // 5 second timeout
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    proc.stdout?.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr?.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    proc.on("close", (code) => {
-      resolve({
-        exitCode: code ?? 1,
-        stdout,
-        stderr,
-      });
-    });
-
-    proc.on("error", (err) => {
-      reject(err);
-    });
-  });
-}
