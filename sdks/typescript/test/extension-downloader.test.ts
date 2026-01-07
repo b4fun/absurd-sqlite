@@ -17,6 +17,16 @@ afterEach(() => {
   }
 });
 
+// Helper function to calculate checksum of a file
+async function getFileChecksum(filePath: string): Promise<string> {
+  const { createHash } = await import("node:crypto");
+  const { readFileSync } = await import("node:fs");
+  const fileBuffer = readFileSync(filePath);
+  const hash = createHash("sha256");
+  hash.update(fileBuffer);
+  return hash.digest("hex");
+}
+
 describe("downloadExtension", () => {
   it("downloads specific version", async () => {
     tempCacheDir = mkdtempSync(join(tmpdir(), "absurd-ext-cache-"));
@@ -89,12 +99,7 @@ describe("downloadExtension", () => {
     });
 
     // Calculate the actual checksum
-    const { createHash } = await import("node:crypto");
-    const { readFileSync } = await import("node:fs");
-    const fileBuffer = readFileSync(extensionPath);
-    const hash = createHash("sha256");
-    hash.update(fileBuffer);
-    const actualChecksum = hash.digest("hex");
+    const actualChecksum = await getFileChecksum(extensionPath);
 
     // Clear cache
     rmSync(extensionPath);
@@ -129,12 +134,7 @@ describe("downloadExtension", () => {
     });
 
     // Calculate the actual checksum
-    const { createHash } = await import("node:crypto");
-    const { readFileSync } = await import("node:fs");
-    const fileBuffer = readFileSync(extensionPath);
-    const hash = createHash("sha256");
-    hash.update(fileBuffer);
-    const actualChecksum = hash.digest("hex");
+    const actualChecksum = await getFileChecksum(extensionPath);
 
     // Use cached file with correct checksum - should succeed
     const path1 = await downloadExtension({
