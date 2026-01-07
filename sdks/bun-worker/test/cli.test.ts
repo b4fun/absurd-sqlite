@@ -88,37 +88,6 @@ describe("Worker configuration", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
   });
 
-  it("supports parseCliFlags option", async () => {
-    const { default: run } = await import("../src/index");
-
-    let workerStarted = false;
-
-    const promise = run(
-      async (absurd) => {
-        await absurd.createQueue("default");
-        absurd.registerTask({ name: "test" }, async () => {
-          return { ok: true };
-        });
-        workerStarted = true;
-      },
-      {
-        parseCliFlags: false,
-        workerOptions: {
-          concurrency: 3,
-        },
-      }
-    );
-
-    // Give the worker time to start
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    expect(workerStarted).toBe(true);
-
-    // Clean up by sending SIGINT
-    process.emit("SIGINT");
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  });
-
   it("works with default options when none provided", async () => {
     const { default: run } = await import("../src/index");
 

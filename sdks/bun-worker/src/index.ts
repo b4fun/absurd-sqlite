@@ -22,65 +22,75 @@ export interface RunOptions {
    * If not provided, CLI flags and environment variables will be used.
    */
   workerOptions?: WorkerOptions;
-  /**
-   * Whether to parse CLI flags for worker configuration.
-   * Defaults to true.
-   */
-  parseCliFlags?: boolean;
+}
+
+/**
+ * Parsed CLI options.
+ */
+interface ParsedOptions {
+  dbPath?: string;
+  extensionPath?: string;
+  concurrency?: number;
+}
+
+/**
+ * Parses CLI arguments and returns parsed options.
+ */
+function parseCliOptions(): ParsedOptions {
+  const cli = cac("bun-worker");
+  
+  cli
+    .option("-c, --concurrency <number>", "Number of tasks to process concurrently", {
+      default: 10,
+    })
+    .option("--database-path <path>", "SQLite database file path")
+    .option("--extension-path <path>", "Absurd-SQLite extension path")
+    .help();
+
+  const parsed = cli.parse(process.argv, { run: false });
+  
+  const options: ParsedOptions = {};
+  
+  if (parsed.options.databasePath) {
+    options.dbPath = parsed.options.databasePath;
+  }
+  if (parsed.options.extensionPath) {
+    options.extensionPath = parsed.options.extensionPath;
+  }
+  if (parsed.options.concurrency) {
+    const value = parseInt(parsed.options.concurrency, 10);
+    if (!isNaN(value) && value > 0) {
+      options.concurrency = value;
+    } else {
+      console.warn(`Invalid value for --concurrency: "${parsed.options.concurrency}" (must be a positive integer)`);
+    }
+  }
+  
+  return options;
 }
 
 /**
  * Boots a worker using Bun's SQLite driver and Absurd's task engine.
  *
- * CLI flags (when parseCliFlags is true):
+ * CLI flags:
  * - --concurrency, -c: Number of tasks to process concurrently (default: 10)
- * - --database, -d: SQLite database file path (overrides ABSURD_DATABASE_PATH)
- * - --extension, -e: Absurd-SQLite extension path (overrides ABSURD_DATABASE_EXTENSION_PATH)
+ * - --database-path: SQLite database file path (overrides ABSURD_DATABASE_PATH)
+ * - --extension-path: Absurd-SQLite extension path (overrides ABSURD_DATABASE_EXTENSION_PATH)
  */
 export default async function run(
   setupFunction: SetupFunction,
   options?: RunOptions
 ): Promise<void> {
-  const parseFlags = options?.parseCliFlags !== false;
+  const cliOptions = parseCliOptions();
   
-  let dbPath = process.env.ABSURD_DATABASE_PATH;
-  let extensionPath = process.env.ABSURD_DATABASE_EXTENSION_PATH;
-  let concurrency: number | undefined;
-
-  if (parseFlags) {
-    const cli = cac("bun-worker");
-    
-    cli
-      .option("-c, --concurrency <number>", "Number of tasks to process concurrently", {
-        default: 10,
-      })
-      .option("-d, --database <path>", "SQLite database file path")
-      .option("-e, --extension <path>", "Absurd-SQLite extension path")
-      .help();
-
-    const parsed = cli.parse(process.argv, { run: false });
-    
-    if (parsed.options.database) {
-      dbPath = parsed.options.database;
-    }
-    if (parsed.options.extension) {
-      extensionPath = parsed.options.extension;
-    }
-    if (parsed.options.concurrency) {
-      const value = parseInt(parsed.options.concurrency, 10);
-      if (!isNaN(value) && value > 0) {
-        concurrency = value;
-      } else {
-        console.warn(`Invalid value for --concurrency: "${parsed.options.concurrency}" (must be a positive integer)`);
-      }
-    }
-  }
+  const dbPath = cliOptions.dbPath || process.env.ABSURD_DATABASE_PATH;
+  const extensionPath = cliOptions.extensionPath || process.env.ABSURD_DATABASE_EXTENSION_PATH;
 
   if (!dbPath) {
-    throw new Error("Database path is required. Set ABSURD_DATABASE_PATH environment variable or use --database flag.");
+    throw new Error("Database path is required. Set ABSURD_DATABASE_PATH environment variable or use --database-path flag.");
   }
   if (!extensionPath) {
-    throw new Error("Extension path is required. Set ABSURD_DATABASE_EXTENSION_PATH environment variable or use --extension flag.");
+    throw new Error("Extension path is required. Set ABSURD_DATABASE_EXTENSION_PATH environment variable or use --extension-path flag.");
   }
 
   const db = new Database(dbPath);
@@ -95,11 +105,11 @@ export default async function run(
 
   // Merge worker options from multiple sources:
   // 1. Default options
-  // 2. CLI flags (if parseCliFlags is true)
+  // 2. CLI flags
   // 3. Explicit options passed to run()
   const workerOptions: WorkerOptions = {
     ...getDefaultWorkerOptions(),
-    ...(concurrency !== undefined ? { concurrency } : {}),
+    ...(cliOptions.concurrency !== undefined ? { concurrency: cliOptions.concurrency } : {}),
     ...options?.workerOptions,
   };
 

@@ -20,31 +20,3 @@ await run((absurd) => {
   });
 });
 ```
-
-## Programmatic Configuration
-
-You can also configure worker options programmatically:
-
-```ts
-import run from "@absurd-sqlite/bun-worker";
-
-await run(
-  (absurd) => {
-    absurd.registerTask({ name: "hello" }, async (params) => {
-      return { ok: true };
-    });
-  },
-  {
-    workerOptions: {
-      concurrency: 5,
-      pollInterval: 10,
-    },
-  }
-);
-```
-
-To disable CLI flag parsing:
-
-```ts
-await run(setupFunction, { parseCliFlags: false });
-```
