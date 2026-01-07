@@ -62,7 +62,7 @@ describe("run", () => {
     const { default: run } = await import("../src/index");
 
     await expect(run(() => {})).rejects.toThrow(
-      "ABSURD_DATABASE_PATH is required"
+      "Database path is required"
     );
   });
 
@@ -71,7 +71,7 @@ describe("run", () => {
     const { default: run } = await import("../src/index");
 
     await expect(run(() => {})).rejects.toThrow(
-      "ABSURD_DATABASE_EXTENSION_PATH is required"
+      "Extension path is required"
     );
   });
 
