@@ -57,37 +57,6 @@ describe("Worker configuration", () => {
     delete process.env.ABSURD_DATABASE_EXTENSION_PATH;
   });
 
-  it("accepts workerOptions programmatically", async () => {
-    const { default: run } = await import("../src/index");
-
-    let workerStarted = false;
-
-    const promise = run(
-      async (absurd) => {
-        await absurd.createQueue("default");
-        absurd.registerTask({ name: "test" }, async () => {
-          return { ok: true };
-        });
-        workerStarted = true;
-      },
-      {
-        workerOptions: {
-          concurrency: 5,
-          pollInterval: 10,
-        },
-      }
-    );
-
-    // Give the worker time to start
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    expect(workerStarted).toBe(true);
-
-    // Clean up by sending SIGINT
-    process.emit("SIGINT");
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  });
-
   it("works with default options when none provided", async () => {
     const { default: run } = await import("../src/index");
 

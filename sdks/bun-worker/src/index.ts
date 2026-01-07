@@ -14,17 +14,6 @@ export type { WorkerOptions } from "absurd-sdk";
 export type SetupFunction = (absurd: AbsurdClient) => void | Promise<void>;
 
 /**
- * Configuration options for the worker runtime.
- */
-export interface RunOptions {
-  /**
-   * Worker configuration options.
-   * If not provided, CLI flags and environment variables will be used.
-   */
-  workerOptions?: WorkerOptions;
-}
-
-/**
  * Parsed CLI options.
  */
 interface ParsedOptions {
@@ -78,8 +67,7 @@ function parseCliOptions(): ParsedOptions {
  * - --extension-path: Absurd-SQLite extension path (overrides ABSURD_DATABASE_EXTENSION_PATH)
  */
 export default async function run(
-  setupFunction: SetupFunction,
-  options?: RunOptions
+  setupFunction: SetupFunction
 ): Promise<void> {
   const cliOptions = parseCliOptions();
   
@@ -106,11 +94,9 @@ export default async function run(
   // Merge worker options from multiple sources:
   // 1. Default options
   // 2. CLI flags
-  // 3. Explicit options passed to run()
   const workerOptions: WorkerOptions = {
     ...getDefaultWorkerOptions(),
     ...(cliOptions.concurrency !== undefined ? { concurrency: cliOptions.concurrency } : {}),
-    ...options?.workerOptions,
   };
 
   const worker = await absurd.startWorker(workerOptions);
