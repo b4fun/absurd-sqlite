@@ -78,6 +78,82 @@ describe("downloadExtension", () => {
     expect(existsSync(path2)).toBe(true);
     expect(path2).toBe(path1); // Same path
   }, 60000);
+
+  it("validates checksum when provided", async () => {
+    tempCacheDir = mkdtempSync(join(tmpdir(), "absurd-ext-cache-"));
+
+    // First download to get the file
+    const extensionPath = await downloadExtension({
+      version: "v0.1.0-alpha.3",
+      cacheDir: tempCacheDir,
+    });
+
+    // Calculate the actual checksum
+    const { createHash } = await import("node:crypto");
+    const { readFileSync } = await import("node:fs");
+    const fileBuffer = readFileSync(extensionPath);
+    const hash = createHash("sha256");
+    hash.update(fileBuffer);
+    const actualChecksum = hash.digest("hex");
+
+    // Clear cache
+    rmSync(extensionPath);
+
+    // Download again with correct checksum - should succeed
+    const path1 = await downloadExtension({
+      version: "v0.1.0-alpha.3",
+      cacheDir: tempCacheDir,
+      expectedChecksum: actualChecksum,
+    });
+
+    expect(existsSync(path1)).toBe(true);
+
+    // Try with wrong checksum - should fail
+    rmSync(path1);
+    await expect(
+      downloadExtension({
+        version: "v0.1.0-alpha.3",
+        cacheDir: tempCacheDir,
+        expectedChecksum: "0000000000000000000000000000000000000000000000000000000000000000",
+      })
+    ).rejects.toThrow(/Checksum verification failed/);
+  }, 60000);
+
+  it("validates checksum of cached file", async () => {
+    tempCacheDir = mkdtempSync(join(tmpdir(), "absurd-ext-cache-"));
+
+    // First download to get the file
+    const extensionPath = await downloadExtension({
+      version: "v0.1.0-alpha.3",
+      cacheDir: tempCacheDir,
+    });
+
+    // Calculate the actual checksum
+    const { createHash } = await import("node:crypto");
+    const { readFileSync } = await import("node:fs");
+    const fileBuffer = readFileSync(extensionPath);
+    const hash = createHash("sha256");
+    hash.update(fileBuffer);
+    const actualChecksum = hash.digest("hex");
+
+    // Use cached file with correct checksum - should succeed
+    const path1 = await downloadExtension({
+      version: "v0.1.0-alpha.3",
+      cacheDir: tempCacheDir,
+      expectedChecksum: actualChecksum,
+    });
+
+    expect(existsSync(path1)).toBe(true);
+
+    // Try with wrong checksum on cached file - should fail
+    await expect(
+      downloadExtension({
+        version: "v0.1.0-alpha.3",
+        cacheDir: tempCacheDir,
+        expectedChecksum: "0000000000000000000000000000000000000000000000000000000000000000",
+      })
+    ).rejects.toThrow(/Cached file checksum verification failed/);
+  }, 60000);
 });
 
 describe("resolveExtensionPath", () => {

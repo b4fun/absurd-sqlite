@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, chmodSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { createHash } from "node:crypto";
 
 export interface DownloadExtensionOptions {
   /**
@@ -29,6 +30,13 @@ export interface DownloadExtensionOptions {
    * Force re-download even if cached version exists.
    */
   force?: boolean;
+
+  /**
+   * Expected SHA256 checksum of the downloaded file for validation.
+   * If provided, the downloaded file's checksum will be verified against this value.
+   * If the checksum doesn't match, an error will be thrown.
+   */
+  expectedChecksum?: string;
 }
 
 interface PlatformInfo {
@@ -127,7 +135,8 @@ async function downloadAsset(
   repo: string,
   tag: string,
   assetName: string,
-  destPath: string
+  destPath: string,
+  expectedChecksum?: string
 ): Promise<void> {
   const url = `https://github.com/${owner}/${repo}/releases/download/${tag}/${assetName}`;
   const response = await fetch(url);
@@ -141,10 +150,27 @@ async function downloadAsset(
   const buffer = await response.arrayBuffer();
   writeFileSync(destPath, Buffer.from(buffer));
 
+  // Verify checksum if provided
+  if (expectedChecksum) {
+    const actualChecksum = calculateChecksum(destPath);
+    if (actualChecksum !== expectedChecksum.toLowerCase()) {
+      throw new Error(
+        `Checksum verification failed. Expected: ${expectedChecksum.toLowerCase()}, Got: ${actualChecksum}`
+      );
+    }
+  }
+
   // Make the extension executable on Unix-like systems
   if (process.platform !== "win32") {
     chmodSync(destPath, 0o755);
   }
+}
+
+function calculateChecksum(filePath: string): string {
+  const fileBuffer = readFileSync(filePath);
+  const hash = createHash("sha256");
+  hash.update(fileBuffer);
+  return hash.digest("hex");
 }
 
 function getCachedPath(
@@ -173,6 +199,12 @@ function getCachedPath(
  *
  * // Download specific version
  * const extensionPath = await downloadExtension({ version: "v0.1.0-alpha.3" });
+ *
+ * // Download with checksum verification
+ * const extensionPath = await downloadExtension({
+ *   version: "v0.1.0-alpha.3",
+ *   expectedChecksum: "abc123..."
+ * });
  * ```
  */
 export async function downloadExtension(
@@ -198,6 +230,15 @@ export async function downloadExtension(
   const cachedPath = getCachedPath(cacheDir, version, platform);
 
   if (!force && existsSync(cachedPath)) {
+    // If checksum is provided, verify cached file
+    if (options.expectedChecksum) {
+      const actualChecksum = calculateChecksum(cachedPath);
+      if (actualChecksum !== options.expectedChecksum.toLowerCase()) {
+        throw new Error(
+          `Cached file checksum verification failed. Expected: ${options.expectedChecksum.toLowerCase()}, Got: ${actualChecksum}`
+        );
+      }
+    }
     return cachedPath;
   }
 
@@ -206,7 +247,7 @@ export async function downloadExtension(
   mkdirSync(versionDir, { recursive: true });
 
   // Download asset
-  await downloadAsset(owner, repo, tag, assetName, cachedPath);
+  await downloadAsset(owner, repo, tag, assetName, cachedPath, options.expectedChecksum);
 
   return cachedPath;
 }
