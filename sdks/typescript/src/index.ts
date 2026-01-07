@@ -5,6 +5,11 @@ import type { SQLiteDatabase } from "./sqlite-types";
 import { SqliteConnection } from "./sqlite";
 
 export type { AbsurdClient, Queryable, Worker } from "./absurd-types";
+export {
+  downloadExtension,
+  resolveExtensionPath,
+  type DownloadExtensionOptions,
+} from "./extension-downloader";
 export type {
   AbsurdHooks,
   AbsurdOptions,
