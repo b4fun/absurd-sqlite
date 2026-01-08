@@ -5,8 +5,9 @@
     "": {
       "name": "@absurd-sqlite/bun-worker",
       "dependencies": {
-        "@absurd-sqlite/sdk": "~0.2.0",
+        "@absurd-sqlite/sdk": "next",
         "absurd-sdk": "~0.0.7",
+        "cac": "^6.7.14",
       },
       "devDependencies": {
         "bun-types": "^1.3.5",
@@ -15,7 +16,7 @@
     },
   },
   "packages": {
-    "@absurd-sqlite/sdk": ["@absurd-sqlite/sdk@0.2.0", "", { "dependencies": { "absurd-sdk": "~0.0.7" }, "peerDependencies": { "better-sqlite3": "^12.5.0" } }, "sha512-DQVvEKK3F/+jvmbcC1dLmm9kTrGk5xn3Hhet76swHDtug/XvY8Tb+pKBjIVNvfqzxcJ+/BBv5QWbW/6qfozPHw=="],
+    "@absurd-sqlite/sdk": ["@absurd-sqlite/sdk@0.2.1-alpha.1", "", { "dependencies": { "absurd-sdk": "~0.0.7" }, "peerDependencies": { "better-sqlite3": "^12.5.0" } }, "sha512-gIly9R1ZO/9Ja/dDbVupxs5Yd4AXx+iDz5PIsq0qg/GSCCIujxt8VXI4c+BvkbvEY1ew7mpvmZa/ttMkKopFrA=="],
 
     "@types/node": ["@types/node@25.0.3", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-W609buLVRVmeW693xKfzHeIV6nJGGz98uCPfeXI1ELMLXVeKYZ9m15fAMSaUPBHYLGFsVRcMmSCksQOrZV9BYA=="],
 
@@ -32,6 +33,8 @@
     "buffer": ["buffer@5.7.1", "", { "dependencies": { "base64-js": "^1.3.1", "ieee754": "^1.1.13" } }, "sha512-EHcyIPBQ4BSGlvjB16k5KgAJ27CIsHY/2JBmCRReo48y9rQ3MaUzWX3KVlBa4U7MyX02HdVj0K7C3WaB3ju7FQ=="],
 
     "bun-types": ["bun-types@1.3.5", "", { "dependencies": { "@types/node": "*" } }, "sha512-inmAYe2PFLs0SUbFOWSVD24sg1jFlMPxOjOSSCYqUgn4Hsc3rDc7dFvfVYjFPNHtov6kgUeulV4SxbuIV/stPw=="],
+
+    "cac": ["cac@6.7.14", "", {}, "sha512-b6Ilus+c3RrdDk+JhLKUAQfzzgLEPy6wcXqS7f/xe1EETvsDP6GORG7SFuOs6cID5YkqchW/LXZbX5bc8j7ZcQ=="],
 
     "chownr": ["chownr@1.1.4", "", {}, "sha512-jJ0bqzaylmJtVnNgzTeSOs8DPavpbYgEr/b0YL8/2GO3xJEhInFmhKMUnEJQjZumK7KXGFhUy89PrsJWlakBVg=="],
 

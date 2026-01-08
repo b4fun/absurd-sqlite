@@ -8,6 +8,11 @@ import { BunSqliteConnection } from "./sqlite";
 export type { AbsurdClient } from "@absurd-sqlite/sdk";
 export type { WorkerOptions } from "absurd-sdk";
 
+export {
+  downloadExtension,
+  type DownloadExtensionOptions,
+} from "@absurd-sqlite/sdk";
+
 /**
  * Register tasks and perform any one-time setup before the worker starts.
  */
@@ -27,24 +32,28 @@ interface ParsedOptions {
  */
 function parseCliOptions(): ParsedOptions {
   const cli = cac("bun-worker");
-  
+
   cli
-    .option("-c, --concurrency <number>", "Number of tasks to process concurrently", {
-      default: 10,
-    })
+    .option(
+      "-c, --concurrency <number>",
+      "Number of tasks to process concurrently",
+      {
+        default: 10,
+      }
+    )
     .option("--database-path <path>", "SQLite database file path")
     .option("--extension-path <path>", "Absurd-SQLite extension path")
     .help();
 
   const parsed = cli.parse(process.argv, { run: false });
-  
+
   // If help was requested, cac will output it and we should exit gracefully
   if (parsed.options.help) {
     process.exit(0);
   }
-  
+
   const options: ParsedOptions = {};
-  
+
   if (parsed.options.databasePath) {
     options.dbPath = parsed.options.databasePath;
   }
@@ -56,10 +65,12 @@ function parseCliOptions(): ParsedOptions {
     if (!isNaN(value) && value > 0) {
       options.concurrency = value;
     } else {
-      console.warn(`Invalid value for --concurrency: "${parsed.options.concurrency}" (must be a positive integer)`);
+      console.warn(
+        `Invalid value for --concurrency: "${parsed.options.concurrency}" (must be a positive integer)`
+      );
     }
   }
-  
+
   return options;
 }
 
@@ -71,19 +82,22 @@ function parseCliOptions(): ParsedOptions {
  * - --database-path: SQLite database file path (overrides ABSURD_DATABASE_PATH)
  * - --extension-path: Absurd-SQLite extension path (overrides ABSURD_DATABASE_EXTENSION_PATH)
  */
-export default async function run(
-  setupFunction: SetupFunction
-): Promise<void> {
+export default async function run(setupFunction: SetupFunction): Promise<void> {
   const cliOptions = parseCliOptions();
-  
+
   const dbPath = cliOptions.dbPath || process.env.ABSURD_DATABASE_PATH;
-  const extensionPath = cliOptions.extensionPath || process.env.ABSURD_DATABASE_EXTENSION_PATH;
+  const extensionPath =
+    cliOptions.extensionPath || process.env.ABSURD_DATABASE_EXTENSION_PATH;
 
   if (!dbPath) {
-    throw new Error("Database path is required. Set ABSURD_DATABASE_PATH environment variable or use --database-path flag.");
+    throw new Error(
+      "Database path is required. Set ABSURD_DATABASE_PATH environment variable or use --database-path flag."
+    );
   }
   if (!extensionPath) {
-    throw new Error("Extension path is required. Set ABSURD_DATABASE_EXTENSION_PATH environment variable or use --extension-path flag.");
+    throw new Error(
+      "Extension path is required. Set ABSURD_DATABASE_EXTENSION_PATH environment variable or use --extension-path flag."
+    );
   }
 
   const db = new Database(dbPath);
@@ -101,7 +115,9 @@ export default async function run(
   // 2. CLI flags
   const workerOptions: WorkerOptions = {
     ...getDefaultWorkerOptions(),
-    ...(cliOptions.concurrency !== undefined ? { concurrency: cliOptions.concurrency } : {}),
+    ...(cliOptions.concurrency !== undefined
+      ? { concurrency: cliOptions.concurrency }
+      : {}),
   };
 
   const worker = await absurd.startWorker(workerOptions);
