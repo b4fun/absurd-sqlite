@@ -38,6 +38,11 @@ function parseCliOptions(): ParsedOptions {
 
   const parsed = cli.parse(process.argv, { run: false });
   
+  // If help was requested, cac will output it and we should exit gracefully
+  if (parsed.options.help) {
+    process.exit(0);
+  }
+  
   const options: ParsedOptions = {};
   
   if (parsed.options.databasePath) {
