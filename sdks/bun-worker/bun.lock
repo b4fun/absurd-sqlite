@@ -16,7 +16,7 @@
     },
   },
   "packages": {
-    "@absurd-sqlite/sdk": ["@absurd-sqlite/sdk@0.2.1-alpha.1", "", { "dependencies": { "absurd-sdk": "~0.0.7" }, "peerDependencies": { "better-sqlite3": "^12.5.0" } }, "sha512-gIly9R1ZO/9Ja/dDbVupxs5Yd4AXx+iDz5PIsq0qg/GSCCIujxt8VXI4c+BvkbvEY1ew7mpvmZa/ttMkKopFrA=="],
+    "@absurd-sqlite/sdk": ["@absurd-sqlite/sdk@0.2.1-alpha.2", "", { "dependencies": { "absurd-sdk": "https://github.com/bcho/absurd/releases/download/sdks%2Ftypescript%2Fv0.0.7/typescript-sdk-v0.0.7.tgz" }, "peerDependencies": { "better-sqlite3": "^12.5.0" } }, "sha512-+8qBOtV/aoHX7BbzxIkzGpuG/o8RQ73Njyxt8Og04NvevceSeUtQ1IlF1Syil5v8EVMsAa2sshuBU0LzZKW/5A=="],
 
     "@types/node": ["@types/node@25.0.3", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-W609buLVRVmeW693xKfzHeIV6nJGGz98uCPfeXI1ELMLXVeKYZ9m15fAMSaUPBHYLGFsVRcMmSCksQOrZV9BYA=="],
 
@@ -133,7 +133,5 @@
     "wrappy": ["wrappy@1.0.2", "", {}, "sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ=="],
 
     "xtend": ["xtend@4.0.2", "", {}, "sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ=="],
-
-    "@absurd-sqlite/sdk/absurd-sdk": ["absurd-sdk@0.0.7", "", { "peerDependencies": { "pg": "^8.0.0" } }, "sha512-8e+LUdtzLHFMMF5vaVCKfp0aZ21t3aazgVkYUFzhb9kL+/bQkD8Vw68tgEAUz53pT2xfIrScTA9QZXYfC1KDtA=="],
   }
 }

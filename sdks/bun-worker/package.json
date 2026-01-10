@@ -1,6 +1,6 @@
 {
   "name": "@absurd-sqlite/bun-worker",
-  "version": "0.2.2-alpha.1",
+  "version": "0.2.2-alpha.2",
   "description": "Bun worker utilities for Absurd-SQLite",
   "type": "module",
   "main": "dist/index.js",
