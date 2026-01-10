@@ -39,7 +39,7 @@
   "homepage": "https://github.com/b4fun/absurd-sqlite#readme",
   "dependencies": {
     "@absurd-sqlite/sdk": "next",
-    "absurd-sdk": "~0.0.7",
+    "absurd-sdk": "https://github.com/bcho/absurd/releases/download/sdks%2Ftypescript%2Fv0.0.7/typescript-sdk-v0.0.7.tgz",
     "cac": "^6.7.14"
   },
   "devDependencies": {
