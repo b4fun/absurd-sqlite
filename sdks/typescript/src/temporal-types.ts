@@ -85,11 +85,7 @@ export function instantToEpochMilliseconds(instant: Instant): number {
  * @returns True if the value is a Temporal.Instant
  */
 export function isInstant(value: unknown): value is Instant {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    value instanceof Temporal.Instant
-  );
+  return value instanceof Temporal.Instant;
 }
 
 /**
@@ -98,9 +94,5 @@ export function isInstant(value: unknown): value is Instant {
  * @returns True if the value is a Temporal.Duration
  */
 export function isDuration(value: unknown): value is Duration {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    value instanceof Temporal.Duration
-  );
+  return value instanceof Temporal.Duration;
 }

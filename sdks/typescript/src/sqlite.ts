@@ -8,7 +8,6 @@ import type {
 import {
   isInstant,
   instantFromEpochMilliseconds,
-  instantToDate,
 } from "./temporal-types";
 
 export class SqliteConnection implements Queryable {
@@ -178,9 +177,9 @@ function decodeColumnValue<V = any>(
 }
 
 function encodeColumnValue(value: any): any {
-  // Handle Temporal.Instant - convert to ISO string
+  // Handle Temporal.Instant - use built-in toString() for ISO string
   if (isInstant(value)) {
-    return instantToDate(value).toISOString();
+    return value.toString();
   }
   // Handle legacy Date objects
   if (value instanceof Date) {
