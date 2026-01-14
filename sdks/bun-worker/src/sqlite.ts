@@ -121,6 +121,11 @@ function decodeColumnValue<V = any>(
       if (!Number.isNaN(numValue)) {
         return new Date(numValue) as V;
       }
+      // Fallback to Date.parse for ISO strings or other valid date formats
+      const parsed = Date.parse(value);
+      if (!Number.isNaN(parsed)) {
+        return new Date(parsed) as V;
+      }
     }
   }
 

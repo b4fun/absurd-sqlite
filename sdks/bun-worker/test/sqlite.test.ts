@@ -93,8 +93,7 @@ describe("BunSqliteConnection", () => {
   it("decodes datetime columns stored as strings into Date objects", async () => {
     const db = new Database(":memory:");
     const conn = new BunSqliteConnection(db);
-    const targetTime = new Date("2024-05-01T10:00:00Z");
-    const timestamp = targetTime.getTime();
+    const timestamp = 1714561200000; // 2024-05-01T11:00:00Z
 
     await conn.exec("CREATE TABLE t_str_date (available_at TEXT)");
     // Insert as string to simulate how SQLite might return datetime columns in some cases
@@ -108,6 +107,26 @@ describe("BunSqliteConnection", () => {
 
     expect(rows[0]?.available_at).toBeInstanceOf(Date);
     expect(rows[0]?.available_at.getTime()).toBe(timestamp);
+    db.close();
+  });
+
+  it("decodes datetime columns with ISO strings into Date objects", async () => {
+    const db = new Database(":memory:");
+    const conn = new BunSqliteConnection(db);
+    const isoString = "2024-05-01T11:00:00.000Z";
+    const expectedTimestamp = new Date(isoString).getTime();
+
+    await conn.exec("CREATE TABLE t_iso_date (created_at TEXT)");
+    await conn.exec("INSERT INTO t_iso_date (created_at) VALUES ($1)", [
+      isoString,
+    ]);
+
+    const { rows } = await conn.query<{ created_at: Date }>(
+      "SELECT created_at FROM t_iso_date"
+    );
+
+    expect(rows[0]?.created_at).toBeInstanceOf(Date);
+    expect(rows[0]?.created_at.getTime()).toBe(expectedTimestamp);
     db.close();
   });
 
