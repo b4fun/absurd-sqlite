@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 
 import { SqliteConnection } from "../src/sqlite";
 import type { SQLiteDatabase } from "../src/sqlite-types";
+import { isInstant, type Instant } from "../src/temporal-types";
 
 describe("SqliteConnection", () => {
   it("rewrites postgres-style params and absurd schema names", async () => {
@@ -69,7 +70,7 @@ describe("SqliteConnection", () => {
     db.close();
   });
 
-  it("decodes datetime columns into Date objects", async () => {
+  it("decodes datetime columns into Temporal.Instant objects", async () => {
     const db = new sqlite(":memory:") as unknown as SQLiteDatabase;
     const conn = new SqliteConnection(db);
     const now = Date.now();
@@ -77,12 +78,12 @@ describe("SqliteConnection", () => {
     await conn.exec("CREATE TABLE t_date (created_at DATETIME)");
     await conn.exec("INSERT INTO t_date (created_at) VALUES ($1)", [now]);
 
-    const { rows } = await conn.query<{ created_at: Date }>(
+    const { rows } = await conn.query<{ created_at: Instant }>(
       "SELECT created_at FROM t_date"
     );
 
-    expect(rows[0]?.created_at).toBeInstanceOf(Date);
-    expect(rows[0]?.created_at.getTime()).toBe(now);
+    expect(isInstant(rows[0]?.created_at)).toBe(true);
+    expect(rows[0]?.created_at.epochMilliseconds).toBe(now);
     db.close();
   });
 

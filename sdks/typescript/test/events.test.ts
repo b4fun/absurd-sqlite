@@ -109,7 +109,7 @@ describe("Event system", () => {
       wake_event: eventName,
     });
     const expectedWake = new Date(baseTime.getTime() + timeoutSeconds * 1000);
-    expect(sleepingRun?.available_at?.getTime()).toBe(expectedWake.getTime());
+    expect(sleepingRun?.available_at?.epochMilliseconds).toBe(expectedWake.getTime());
 
     await ctx.setFakeNow(new Date(expectedWake.getTime() + 1000));
     await absurd.workBatch("worker1", 120, 1);

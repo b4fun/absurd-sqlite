@@ -205,7 +205,7 @@ describe("Step functionality", () => {
       state: "sleeping",
     });
     const wakeTime = new Date(base.getTime() + durationSeconds * 1000);
-    expect(sleepingRun?.available_at?.getTime()).toBe(wakeTime.getTime());
+    expect(sleepingRun?.available_at?.epochMilliseconds).toBe(wakeTime.getTime());
 
     const resumeTime = new Date(wakeTime.getTime() + 5 * 1000);
     vi.setSystemTime(resumeTime);

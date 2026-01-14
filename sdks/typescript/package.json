@@ -36,7 +36,8 @@
     "better-sqlite3": "^12.5.0"
   },
   "dependencies": {
-    "absurd-sdk": "https://github.com/bcho/absurd/releases/download/sdks%2Ftypescript%2Fv0.0.7/typescript-sdk-v0.0.7.tgz"
+    "absurd-sdk": "https://github.com/bcho/absurd/releases/download/sdks%2Ftypescript%2Fv0.0.7/typescript-sdk-v0.0.7.tgz",
+    "temporal-polyfill": "^0.3.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

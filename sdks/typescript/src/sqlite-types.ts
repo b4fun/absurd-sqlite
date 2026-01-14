@@ -1,4 +1,17 @@
-export type SQLiteBindValue = number | string | Buffer | bigint | Date | null;
+import type { Instant } from "./temporal-types";
+
+/**
+ * Values that can be bound to SQLite prepared statements.
+ * Supports both JavaScript Date and Temporal.Instant for datetime values.
+ */
+export type SQLiteBindValue =
+  | number
+  | string
+  | Buffer
+  | bigint
+  | Date
+  | Instant
+  | null;
 
 export type SQLiteBindParams =
   | SQLiteBindValue[]
