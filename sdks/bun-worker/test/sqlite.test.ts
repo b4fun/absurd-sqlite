@@ -93,12 +93,13 @@ describe("BunSqliteConnection", () => {
   it("decodes datetime columns stored as strings into Date objects", async () => {
     const db = new Database(":memory:");
     const conn = new BunSqliteConnection(db);
-    const timestamp = 1714561200000; // 2024-05-01T11:00:00Z
+    // Fixed timestamp for May 1, 2024 11:00:00 UTC
+    const fixedTimestamp2024 = 1714561200000;
 
     await conn.exec("CREATE TABLE t_str_date (available_at TEXT)");
     // Insert as string to simulate how SQLite might return datetime columns in some cases
     await conn.exec("INSERT INTO t_str_date (available_at) VALUES ($1)", [
-      timestamp.toString(),
+      fixedTimestamp2024.toString(),
     ]);
 
     const { rows } = await conn.query<{ available_at: Date }>(
@@ -106,7 +107,7 @@ describe("BunSqliteConnection", () => {
     );
 
     expect(rows[0]?.available_at).toBeInstanceOf(Date);
-    expect(rows[0]?.available_at.getTime()).toBe(timestamp);
+    expect(rows[0]?.available_at.getTime()).toBe(fixedTimestamp2024);
     db.close();
   });
 
