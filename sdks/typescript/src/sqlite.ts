@@ -5,6 +5,10 @@ import type {
   SQLiteStatement,
   SQLiteVerboseLog,
 } from "./sqlite-types";
+import {
+  isInstant,
+  instantFromEpochMilliseconds,
+} from "./temporal-types";
 
 export class SqliteConnection implements Queryable {
   private readonly db: SQLiteDatabase;
@@ -164,7 +168,8 @@ function decodeColumnValue<V = any>(
         `Expected datetime column ${columnName} to be a number, got ${typeof value}`
       );
     }
-    return new Date(value) as V;
+    // Return Temporal.Instant for datetime columns
+    return instantFromEpochMilliseconds(value) as V;
   }
 
   // For other types, return as is
@@ -172,6 +177,11 @@ function decodeColumnValue<V = any>(
 }
 
 function encodeColumnValue(value: any): any {
+  // Handle Temporal.Instant - use built-in toString() for ISO string
+  if (isInstant(value)) {
+    return value.toString();
+  }
+  // Handle legacy Date objects
   if (value instanceof Date) {
     return value.toISOString();
   }

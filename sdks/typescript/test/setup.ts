@@ -11,7 +11,12 @@ import {
 } from "absurd-sdk";
 
 import { SqliteConnection } from "../src/sqlite";
-import type { Absurd, SQLiteDatabase } from "../src/index";
+import type { Absurd, SQLiteDatabase, Instant } from "../src/index";
+import {
+  instantFromDate,
+  instantToEpochMilliseconds,
+  isInstant,
+} from "../src/temporal-types";
 
 // Database row types matching the SQLite schema
 export interface TaskRow {
@@ -22,8 +27,8 @@ export interface TaskRow {
   retry_strategy: JsonValue | null;
   max_attempts: number | null;
   cancellation: JsonValue | null;
-  enqueue_at: Date;
-  first_started_at: Date | null;
+  enqueue_at: Instant;
+  first_started_at: Instant | null;
   state:
     | "pending"
     | "running"
@@ -34,7 +39,7 @@ export interface TaskRow {
   attempts: number;
   last_attempt_run: string | null;
   completed_payload: JsonValue | null;
-  cancelled_at: Date | null;
+  cancelled_at: Instant | null;
 }
 
 export interface RunRow {
@@ -49,16 +54,16 @@ export interface RunRow {
     | "failed"
     | "cancelled";
   claimed_by: string | null;
-  claim_expires_at: Date | null;
-  available_at: Date;
+  claim_expires_at: Instant | null;
+  available_at: Instant;
   wake_event: string | null;
   event_payload: JsonValue | null;
-  started_at: Date | null;
-  completed_at: Date | null;
-  failed_at: Date | null;
+  started_at: Instant | null;
+  completed_at: Instant | null;
+  failed_at: Instant | null;
   result: JsonValue | null;
   failure_reason: JsonValue | null;
-  created_at: Date;
+  created_at: Instant;
 }
 
 interface SqliteFixture {
@@ -90,7 +95,7 @@ export interface TestContext {
   getTask(taskID: string): Promise<TaskRow | null>;
   getRun(runID: string): Promise<RunRow | null>;
   getRuns(taskID: string): Promise<RunRow[]>;
-  setFakeNow(ts: Date | null): Promise<void>;
+  setFakeNow(ts: Date | Instant | null): Promise<void>;
   sleep(ms: number): Promise<void>;
   getRemainingTasksCount(): Promise<number>;
   getRemainingEventsCount(): Promise<number>;
@@ -103,7 +108,7 @@ export interface TestContext {
     state: JsonValue;
     owner_run_id: string;
   } | null>;
-  scheduleRun(runID: string, wakeAt: Date): Promise<void>;
+  scheduleRun(runID: string, wakeAt: Date | Instant): Promise<void>;
   completeRun(runID: string, payload: JsonValue): Promise<void>;
   cleanupTasksByTTL(ttlSeconds: number, limit: number): Promise<number>;
   cleanupEventsByTTL(ttlSeconds: number, limit: number): Promise<number>;
@@ -194,7 +199,7 @@ export async function createTestAbsurd(
     getTask: (taskID: string) => getTask(fixture.conn, taskID, queueName),
     getRun: (runID: string) => getRun(fixture.conn, runID, queueName),
     getRuns: (taskID: string) => getRuns(fixture.conn, taskID, queueName),
-    setFakeNow: (ts: Date | null) => setFakeNow(fixture.conn, ts),
+    setFakeNow: (ts: Date | Instant | null) => setFakeNow(fixture.conn, ts),
     sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
     getRemainingTasksCount: () =>
       getRemainingTasksCount(fixture.conn, queueName),
@@ -203,7 +208,7 @@ export async function createTestAbsurd(
     getWaitsCount: () => getWaitsCount(fixture.conn, queueName),
     getCheckpoint: (taskID: string, checkpointName: string) =>
       getCheckpoint(fixture.conn, taskID, checkpointName, queueName),
-    scheduleRun: (runID: string, wakeAt: Date) =>
+    scheduleRun: (runID: string, wakeAt: Date | Instant) =>
       scheduleRun(fixture.conn, runID, wakeAt, queueName),
     completeRun: (runID: string, payload: JsonValue) =>
       completeRun(fixture.conn, runID, payload, queueName),
@@ -260,13 +265,14 @@ export async function createTestAbsurd(
 
 async function setFakeNow(
   conn: SqliteConnection,
-  ts: Date | null
+  ts: Date | Instant | null
 ): Promise<void> {
   if (ts === null) {
     await conn.exec("select absurd.set_fake_now(null)");
     return;
   }
-  await conn.exec("select absurd.set_fake_now($1)", [ts.getTime()]);
+  const epochMs = isInstant(ts) ? instantToEpochMilliseconds(ts) : ts.getTime();
+  await conn.exec("select absurd.set_fake_now($1)", [epochMs]);
 }
 
 async function cleanupTasks(
@@ -449,13 +455,17 @@ async function getCheckpoint(
 async function scheduleRun(
   conn: SqliteConnection,
   runID: string,
-  wakeAt: Date,
+  wakeAt: Date | Instant,
   queue: string
 ): Promise<void> {
+  // Convert Instant to Date for the SQLite extension, which accepts Date
+  const wakeAtDate = isInstant(wakeAt)
+    ? new Date(instantToEpochMilliseconds(wakeAt))
+    : wakeAt;
   await conn.exec(`SELECT absurd.schedule_run($1, $2, $3)`, [
     queue,
     runID,
-    wakeAt,
+    wakeAtDate,
   ]);
 }
 

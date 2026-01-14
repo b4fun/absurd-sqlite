@@ -35,6 +35,21 @@ export type {
   SQLiteVerboseLog,
 } from "./sqlite-types";
 
+// Export Temporal types and helpers
+export {
+  Temporal,
+  type Duration,
+  type Instant,
+  durationFromSeconds,
+  durationToSeconds,
+  instantFromDate,
+  instantFromEpochMilliseconds,
+  instantToDate,
+  instantToEpochMilliseconds,
+  isDuration,
+  isInstant,
+} from "./temporal-types";
+
 export class Absurd extends AbsurdBase implements AbsurdClient {
   private db: SQLiteDatabase;
 

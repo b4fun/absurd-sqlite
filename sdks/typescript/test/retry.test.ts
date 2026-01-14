@@ -312,8 +312,8 @@ describe("Retry and cancellation", () => {
 
     await absurd.cancelTask(taskID);
     const second = await ctx.getTask(taskID);
-    expect(second?.cancelled_at?.getTime()).toBe(
-      first?.cancelled_at?.getTime(),
+    expect(second?.cancelled_at?.epochMilliseconds).toBe(
+      first?.cancelled_at?.epochMilliseconds,
     );
   });
 
