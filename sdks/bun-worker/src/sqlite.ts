@@ -118,7 +118,9 @@ function decodeColumnValue<V = any>(
     if (typeof value === "string") {
       // Try parsing as Unix timestamp in milliseconds (stored as string)
       const numValue = parseInt(value, 10);
-      if (!Number.isNaN(numValue)) {
+      // Validate it's a reasonable Unix timestamp (at least 13 digits for milliseconds since epoch)
+      // This prevents partial parsing of ISO strings (e.g., "2024" from "2024-05-01")
+      if (!Number.isNaN(numValue) && numValue >= 1000000000000) {
         return new Date(numValue) as V;
       }
       // Fallback to Date.parse for ISO strings or other valid date formats
