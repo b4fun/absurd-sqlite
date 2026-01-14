@@ -7,6 +7,10 @@ import type {
   SQLiteRestBindParams,
 } from "@absurd-sqlite/sdk";
 
+// Minimum valid Unix timestamp in milliseconds (September 9, 2001)
+// Used to distinguish Unix timestamps from partial ISO string parsing
+const MIN_UNIX_TIMESTAMP_MS = 1000000000000;
+
 export class BunSqliteConnection implements Queryable {
   private readonly db: Database;
   private readonly maxRetries = 5;
@@ -118,10 +122,8 @@ function decodeColumnValue<V = any>(
     if (typeof value === "string") {
       // Try parsing as Unix timestamp in milliseconds (stored as string)
       const numValue = parseInt(value, 10);
-      // Validate it's a reasonable Unix timestamp (at least 13 digits for milliseconds since epoch)
-      // This prevents partial parsing of ISO strings (e.g., "2024" from "2024-05-01")
-      // 1000000000000 ms = September 9, 2001
-      const MIN_UNIX_TIMESTAMP_MS = 1000000000000;
+      // Validate it's a reasonable Unix timestamp to prevent partial parsing
+      // of ISO strings (e.g., "2024" from "2024-05-01")
       if (!Number.isNaN(numValue) && numValue >= MIN_UNIX_TIMESTAMP_MS) {
         return new Date(numValue) as V;
       }
