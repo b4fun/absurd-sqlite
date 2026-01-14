@@ -90,6 +90,27 @@ describe("BunSqliteConnection", () => {
     db.close();
   });
 
+  it("decodes datetime columns stored as strings into Date objects", async () => {
+    const db = new Database(":memory:");
+    const conn = new BunSqliteConnection(db);
+    const targetTime = new Date("2024-05-01T10:00:00Z");
+    const timestamp = targetTime.getTime();
+
+    await conn.exec("CREATE TABLE t_str_date (available_at TEXT)");
+    // Insert as string to simulate how SQLite might return datetime columns in some cases
+    await conn.exec("INSERT INTO t_str_date (available_at) VALUES ($1)", [
+      timestamp.toString(),
+    ]);
+
+    const { rows } = await conn.query<{ available_at: Date }>(
+      "SELECT available_at FROM t_str_date"
+    );
+
+    expect(rows[0]?.available_at).toBeInstanceOf(Date);
+    expect(rows[0]?.available_at.getTime()).toBe(timestamp);
+    db.close();
+  });
+
   it("retries when SQLite reports the database is busy", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "absurd-sqlite-busy-"));
     const dbPath = join(tempDir, "busy.db");

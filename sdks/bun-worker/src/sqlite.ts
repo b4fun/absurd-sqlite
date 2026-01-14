@@ -116,9 +116,10 @@ function decodeColumnValue<V = any>(
       return new Date(value) as V;
     }
     if (typeof value === "string") {
-      const parsed = Date.parse(value);
-      if (!Number.isNaN(parsed)) {
-        return new Date(parsed) as V;
+      // Try parsing as Unix timestamp in milliseconds (stored as string)
+      const numValue = parseInt(value, 10);
+      if (!Number.isNaN(numValue)) {
+        return new Date(numValue) as V;
       }
     }
   }
