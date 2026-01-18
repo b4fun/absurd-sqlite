@@ -14,6 +14,9 @@ struct QueueRow {
     created_at: i64,
 }
 
+/// SQL: absurd_list_queues()
+/// Usage: list queues with creation timestamps.
+/// Section: Durable
 #[repr(C)]
 pub struct ListQueuesTable {
     base: sqlite3_vtab,

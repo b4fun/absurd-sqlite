@@ -1,0 +1,2 @@
+[alias]
+docs-sqlite-functions = "run -p absurd-sqlite-extension --bin extract_sqlite_functions -- --out docs-starlight/src/content/docs/reference/sqlite-functions.mdx"

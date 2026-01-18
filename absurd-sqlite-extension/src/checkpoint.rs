@@ -29,6 +29,9 @@ fn parse_optional_int(value: &*mut sqlite3_value) -> Option<i64> {
     }
 }
 
+/// SQL: absurd_set_task_checkpoint_state(queue_name, task_id, step_name, state_json, owner_run_id[, extend_claim_by_secs])
+/// Usage: store checkpoint state for a step; optionally extend the run claim.
+/// Section: Durable
 pub fn absurd_set_task_checkpoint_state(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
@@ -200,6 +203,9 @@ fn checkpoint_output_column(index: i32) -> Option<CheckpointColumns> {
     }
 }
 
+/// SQL: absurd_get_task_checkpoint_state(queue_name, task_id, step_name[, include_pending])
+/// Usage: fetch checkpoint state for a step (returns status and metadata).
+/// Section: Durable
 #[repr(C)]
 pub struct CheckpointStateTable {
     base: sqlite3_vtab,
@@ -285,6 +291,9 @@ impl<'vtab> VTab<'vtab> for CheckpointStateTable {
     }
 }
 
+/// SQL: absurd_get_task_checkpoint_states(queue_name, task_id[, run_id])
+/// Usage: list checkpoint states for a task.
+/// Section: Durable
 #[repr(C)]
 pub struct CheckpointStatesTable {
     base: sqlite3_vtab,

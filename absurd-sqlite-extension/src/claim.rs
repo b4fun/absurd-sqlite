@@ -586,6 +586,9 @@ fn claim_column(index: i32) -> Option<ClaimColumns> {
     }
 }
 
+/// SQL: absurd_claim_task(queue_name[, worker_id, claim_timeout_secs, qty])
+/// Usage: claim available runs for a worker (defaults: worker, 30s, qty=1).
+/// Section: Durable
 #[repr(C)]
 pub struct ClaimTaskTable {
     base: sqlite3_vtab,

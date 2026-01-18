@@ -300,6 +300,9 @@ fn fail_run_impl(
     }
 }
 
+/// SQL: absurd_complete_run(queue_name, run_id, result_json_or_null)
+/// Usage: mark a running run as completed and store its result payload.
+/// Section: Durable
 pub fn absurd_complete_run(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
@@ -407,6 +410,9 @@ pub fn absurd_complete_run(
     }
 }
 
+/// SQL: absurd_fail_run(queue_name, run_id, reason[, retry_at_ms])
+/// Usage: mark a run as failed and optionally schedule a retry timestamp.
+/// Section: Durable
 pub fn absurd_fail_run(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let queue_name = api::value_text_notnull(values.first().expect("queue_name"))?;
     let run_id = api::value_text_notnull(values.get(1).expect("run_id"))?;
@@ -422,6 +428,9 @@ pub fn absurd_fail_run(context: *mut sqlite3_context, values: &[*mut sqlite3_val
     Ok(())
 }
 
+/// SQL: absurd_fail_run(queue_name, run_id, reason[, retry_at_ms])
+/// Usage: mark a run as failed and optionally schedule a retry timestamp.
+/// Section: Durable
 pub fn absurd_fail_run_no_retry(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
@@ -434,6 +443,9 @@ pub fn absurd_fail_run_no_retry(
     Ok(())
 }
 
+/// SQL: absurd_extend_claim(queue_name, run_id, extend_by_secs)
+/// Usage: extend a running claim by N seconds.
+/// Section: Durable
 pub fn absurd_extend_claim(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
@@ -510,6 +522,9 @@ pub fn absurd_extend_claim(
     }
 }
 
+/// SQL: absurd_schedule_run(queue_name, run_id, wake_at_ms)
+/// Usage: put a running run to sleep until the given timestamp.
+/// Section: Durable
 pub fn absurd_schedule_run(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
@@ -584,6 +599,10 @@ pub fn absurd_schedule_run(
     }
 }
 
+/// SQL: absurd_cleanup_tasks(queue_name, ttl_seconds[, limit])
+/// Usage: delete terminal tasks older than TTL, including runs/checkpoints/waits.
+/// Section: Durable
+///
 /// Remove terminal tasks for a queue that are older than the TTL cutoff.
 ///
 /// Flow:
@@ -707,6 +726,9 @@ pub fn absurd_cleanup_tasks(
     Ok(())
 }
 
+/// SQL: absurd_cleanup_events(queue_name, ttl_seconds[, limit])
+/// Usage: delete events older than TTL.
+/// Section: Durable
 pub fn absurd_cleanup_events(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
@@ -757,6 +779,9 @@ pub fn absurd_cleanup_events(
     Ok(())
 }
 
+/// SQL: absurd_cancel_task(queue_name, task_id)
+/// Usage: cancel a task and any active runs.
+/// Section: Durable
 pub fn absurd_cancel_task(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],

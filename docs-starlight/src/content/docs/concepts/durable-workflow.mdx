@@ -1,0 +1,39 @@
+---
+title: Durable Workflow
+---
+
+See here for a detailed answer from [ChatGPT 5.2 Thinking][chatgpt_definition].
+
+Durable workflow let developers express long-running, complex workflows reliably.
+The key differentiator is that the workflow runtime persists execution progress/state
+(often as checkpoints or event history) to durable storage, so the workflow can
+resume safely after failures, crashes, or restarts.
+
+## Why Durable Workflow?
+
+Durable workflow is helpful for processes that require longer execution times
+(minutes instead of milliseconds), and/or involve complex state management.
+Instead of maintaining complex state bookkeeping in application code, durable workflow
+encourages developers to express workflows as a series of tasks/activities and
+capture the deterministic state transitions. As a result, workflows become easier
+to recover/retry and update over time.
+
+### When Not to Use Durable Workflow
+
+Durable workflow might not be a good fit for the following scenarios:
+
+- Short-lived processes.
+- Latency sensitive applications.
+- Applications leverage non-deterministic/ side-effect operations heavily.
+
+## How Durable Workflow Helps in LLM Agency
+
+LLM agents by nature are long-running processes and require complex state management
+retries and recovery from failures. Durable workflows provide a strong foundation for
+agent orchestration by decomposing agent behavior into smaller tasks, persisting execution
+state/history, and enabling safe resumption, retries, and compensation across failures.
+This turns agent execution into a fault-tolerant process rather than a best-effort script.
+
+{/* add a CFA to show how to write and run a workflow */}
+
+[chatgpt_definition]:https://chatgpt.com/share/696c87ea-64d4-8011-b669-abf756e46000

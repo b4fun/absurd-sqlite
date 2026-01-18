@@ -43,6 +43,9 @@ fn ensure_migrations_table(db: *mut sqlite3) -> Result<()> {
     sql::exec_with_bind_text(db, MIGRATIONS_TABLE_SQL, &[])
 }
 
+/// SQL: absurd_apply_migrations([target_version])
+/// Usage: apply schema migrations up to the target version.
+/// Section: Schema
 pub fn absurd_apply_migrations(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
@@ -127,6 +130,9 @@ struct MigrationRecord {
     applied_time: i64,
 }
 
+/// SQL: absurd_migration_records()
+/// Usage: list applied migrations (id, introduced_version, applied_time).
+/// Section: Schema
 #[repr(C)]
 pub struct MigrationRecordsTable {
     base: sqlite3_vtab,

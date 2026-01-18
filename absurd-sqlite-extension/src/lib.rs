@@ -17,6 +17,9 @@ mod spawn;
 mod sql;
 mod validate;
 
+/// SQL: absurd_version()
+/// Usage: return extension version and git commit.
+/// Section: Meta
 fn absurd_version(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<()> {
     let version = env!("CARGO_PKG_VERSION");
     let git_commit = env!("GIT_COMMIT");
@@ -28,6 +31,9 @@ fn absurd_version(context: *mut sqlite3_context, _values: &[*mut sqlite3_value])
 }
 
 // NOTE: jsonb() is provided by SQLite 3.45+. No local shim needed.
+/// SQL: absurd_create_queue(queue_name)
+/// Usage: create a queue if it does not exist.
+/// Section: Durable
 fn absurd_create_queue(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let queue_name =
         sqlite_loadable::api::value_text_notnull(values.first().expect("queue_name is required"))?;
@@ -43,6 +49,9 @@ fn absurd_create_queue(context: *mut sqlite3_context, values: &[*mut sqlite3_val
     Ok(())
 }
 
+/// SQL: absurd_drop_queue(queue_name)
+/// Usage: drop a queue and return the number of rows removed.
+/// Section: Durable
 fn absurd_drop_queue(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let queue_name =
         sqlite_loadable::api::value_text_notnull(values.first().expect("queue_name is required"))?;

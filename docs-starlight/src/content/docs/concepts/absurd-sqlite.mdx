@@ -1,0 +1,58 @@
+---
+title: Absurd SQLite
+---
+
+Absurd SQLite is a SQLite based durable workflow. It based on the implementation
+from [earendil-works/absurd][]. Instead of using Postgres, this project uses
+SQLite as a lightweight alternative to provide fast and easy-to-use integration.
+
+Absurd SQLite is a project consists of three parts:
+
+- [SQLite extension][absurd-sqlite-extension] that implements the durable workload
+  logic by wrapping SQLite built-in features.
+- [Language SDKs][absurd-sdks] for writing and invoking the workflows in your favorite language.
+- [Standalone application][absurd-standalone] for managing the workflow queues and tasks.
+
+This project aims to provide out-of-box experience for writing and running durable
+workflows in local environments (your laptop or homelab) or on a single VM instance (fly.io, Render).
+Common use cases include local LLM agents, personal automation scripts, and small
+scale backend processing services.
+
+## Comparison with Absurd
+
+Absurd SQLite is inspired by Absurd and follows the similar design principles like
+putting the main logic in the database layer. However, due to the nature of SQLite
+which has no long running server process, Absurd SQLite expects the users to invoke
+and orchestrate workflows via a single writer process. This could be a limitation
+for large scale applications, however, it should be sufficient for local / small
+scale use cases. {/* link to use cases */}
+
+```d2
+direction: right
+
+Absurd: {
+  worker_a: Worker in Typescript
+  worker_b: Worker in Python
+  postgres: Postgres Database
+  absurd: Absurd Schema & Functions
+
+  worker_a -> postgres: invokes
+  worker_b -> postgres: invokes
+  postgres -> absurd: executes
+}
+
+Absurd SQLite: {
+  worker_c: Worker in Typescript
+  sqlite: SQLite Database
+  absurd_sqlite: Absurd SQLite Schema & Extension
+
+  worker_c -> sqlite: invokes
+  sqlite -> absurd_sqlite: invokes
+}
+
+```
+
+[earendil-works/absurd]: https://github.com/earendil-works/absurd
+[absurd-sqlite-extension]: https://github.com/b4fun/absurd-sqlite/tree/main/absurd-sqlite-extension
+[absurd-sdks]: https://github.com/b4fun/absurd-sqlite/tree/main/sdks
+[absurd-standalone]: https://github.com/b4fun/absurd-sqlite/tree/main/standalone
