@@ -1,3 +1,57 @@
 ---
 title: Javascript/Typescript SDK
 ---
+
+import { Code } from '@astrojs/starlight/components';
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Absurd SQLite provides first class support for Javascript and Typescript through the <a href="https://www.npmjs.com/package/@absurd-sqlite/sdk" target="_blank">typescript</a> SDK.
+
+## Installation
+
+<Tabs defaultValue="npm" class="mb-4" syncKey="packageManager">
+  <TabItem value="npm" label="npm">
+    ```bash
+    npm install @absurd-sqlite/sdk
+    ```
+  </TabItem>
+  <TabItem value="yarn" label="yarn">
+    ```bash
+    yarn add @absurd-sqlite/sdk
+    ```
+  </TabItem>
+  <TabItem value="bun" label="bun">
+    ```bash
+    bun add @absurd-sqlite/sdk
+    ```
+  </TabItem>
+</Tabs>
+
+## Usages
+
+### Basic Usage
+
+See [here](https://github.com/b4fun/absurd-sqlite/blob/main/samples/typescript-client/src/index.ts).
+
+{/* TODO: embed sample here  */}
+
+### Downloading Extension
+
+<Tabs defaultValue="typescript" class="mb-4" syncKey="lang">
+  <TabItem value="typescript" label="TypeScript">
+    ```typescript
+    import { downloadAbsurdSQLiteExtension } from '@absurd-sqlite/sdk/fs';
+
+    const extensionPath = await downloadAbsurdSQLiteExtension();
+    console.log(`Extension downloaded to: ${extensionPath}`);
+    ```
+  </TabItem>
+  <TabItem value="javascript" label="JavaScript">
+    ```javascript
+    import { downloadAbsurdSQLiteExtension } from '@absurd-sqlite/sdk/fs';
+
+    const extensionPath = await downloadAbsurdSQLiteExtension();
+    console.log(`Extension downloaded to: ${extensionPath}`);
+    ```
+  </TabItem>
+</Tabs>
