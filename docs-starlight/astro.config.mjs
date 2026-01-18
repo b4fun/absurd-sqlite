@@ -6,7 +6,12 @@ import starlightThemeRapide from "starlight-theme-rapide";
 import d2 from "astro-d2";
 
 // https://astro.build/config
+const site = process.env.SITE;
+const base = process.env.BASE;
+
 export default defineConfig({
+  site,
+  base,
   integrations: [
     starlight({
       plugins: [starlightThemeRapide()],
