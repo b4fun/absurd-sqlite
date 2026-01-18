@@ -294,6 +294,9 @@ fn await_event_impl(
     }
 }
 
+/// SQL: absurd_emit_event(queue_name, event_name[, payload_json])
+/// Usage: emit or update an event payload and wake waiting runs.
+/// Section: Durable
 pub fn absurd_emit_event(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],
@@ -480,6 +483,9 @@ fn await_column(index: i32) -> Option<AwaitColumns> {
     }
 }
 
+/// SQL: absurd_await_event(queue_name, task_id, run_id, step_name, event_name[, timeout_secs])
+/// Usage: await an event or timeout; returns should_suspend and payload.
+/// Section: Durable
 #[repr(C)]
 pub struct AwaitEventTable {
     base: sqlite3_vtab,

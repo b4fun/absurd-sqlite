@@ -30,6 +30,9 @@ fn parse_optional_int(value: Option<*mut sqlite3_value>) -> Result<Option<i64>> 
     }
 }
 
+/// SQL: absurd_set_fake_now(fake_now_ms_or_null)
+/// Usage: override or clear the engine's time source for testing.
+/// Section: Meta
 pub fn absurd_set_fake_now(
     context: *mut sqlite3_context,
     values: &[*mut sqlite3_value],

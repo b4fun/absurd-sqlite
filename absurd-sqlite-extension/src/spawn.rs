@@ -243,6 +243,9 @@ fn spawn_column(index: i32) -> Option<SpawnColumns> {
     }
 }
 
+/// SQL: absurd_spawn_task(queue_name, task_name, params_json[, options_json])
+/// Usage: create a task and its initial run; options may include headers, retry_strategy, max_attempts, cancellation, and idempotency_key.
+/// Section: Durable
 #[repr(C)]
 pub struct SpawnTaskTable {
     base: sqlite3_vtab,
