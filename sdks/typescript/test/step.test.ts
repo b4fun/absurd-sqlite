@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterEach, vi } from "vitest";
 import { createTestAbsurd, randomName, type TestContext } from "./setup.js";
-import type { Absurd } from "../src/index.js";
+import { Temporal, type Absurd } from "../src/index.js";
 
 describe("Step functionality", () => {
   let ctx: TestContext;
@@ -193,7 +193,7 @@ describe("Step functionality", () => {
 
     const durationSeconds = 60;
     absurd.registerTask({ name: "sleep-for" }, async (_params, ctx) => {
-      await ctx.sleepFor("wait-for", durationSeconds);
+      await ctx.sleepFor("wait-for", Temporal.Duration.from({ seconds: durationSeconds }));
       return { resumed: true };
     });
 
@@ -225,11 +225,12 @@ describe("Step functionality", () => {
     await ctx.setFakeNow(base);
 
     const wakeTime = new Date(base.getTime() + 5 * 60 * 1000);
+    const wakeInstant = Temporal.Instant.fromEpochMilliseconds(wakeTime.getTime());
     let executions = 0;
 
     absurd.registerTask({ name: "sleep-until" }, async (_params, ctx) => {
       executions++;
-      await ctx.sleepUntil("sleep-step", wakeTime);
+      await ctx.sleepUntil("sleep-step", wakeInstant);
       return { executions };
     });
 
@@ -240,7 +241,7 @@ describe("Step functionality", () => {
     expect(checkpointRow).toMatchObject({
       checkpoint_name: "sleep-step",
       owner_run_id: runID,
-      state: wakeTime.toISOString(),
+      state: wakeInstant.toString(),
     });
 
     const sleepingRun = await ctx.getRun(runID);

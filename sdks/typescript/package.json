@@ -36,6 +36,9 @@
   "peerDependencies": {
     "better-sqlite3": "^12.5.0"
   },
+  "dependencies": {
+    "temporal-polyfill": "^0.3.0"
+  },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.18.0",

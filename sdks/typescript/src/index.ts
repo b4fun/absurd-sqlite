@@ -11,6 +11,9 @@ import {
 } from "./absurd";
 import { SQLiteConnection } from "./sqlite-connection";
 
+// Re-export Temporal from temporal-polyfill
+export { Temporal } from "temporal-polyfill";
+
 export type { Queryable } from "./absurd";
 export {
   CancelledTask,

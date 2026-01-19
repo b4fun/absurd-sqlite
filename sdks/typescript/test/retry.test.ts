@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterEach } from "vitest";
 import { createTestAbsurd, randomName, type TestContext } from "./setup.js";
-import type { Absurd } from "../src/index.js";
+import { Temporal, type Absurd } from "../src/index.js";
 
 describe("Retry and cancellation", () => {
   let ctx: TestContext;
@@ -159,7 +159,7 @@ describe("Retry and cancellation", () => {
     const { taskID } = await absurd.spawn("duration-cancel", undefined, {
       maxAttempts: 4,
       retryStrategy: { kind: "fixed", baseSeconds: 30 },
-      cancellation: { maxDuration: 90 },
+      cancellation: { maxDuration: Temporal.Duration.from({ seconds: 90 }) },
     });
 
     await absurd.workBatch("worker1", 60, 1);
@@ -185,7 +185,7 @@ describe("Retry and cancellation", () => {
     });
 
     const { taskID } = await absurd.spawn("delay-cancel", undefined, {
-      cancellation: { maxDelay: 60 },
+      cancellation: { maxDelay: Temporal.Duration.from({ seconds: 60 }) },
     });
 
     await ctx.setFakeNow(new Date(baseTime.getTime() + 61 * 1000));

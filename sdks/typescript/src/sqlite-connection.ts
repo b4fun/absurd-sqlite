@@ -1,3 +1,4 @@
+import { Temporal } from "temporal-polyfill";
 import type { Queryable } from "./absurd";
 import type {
   SQLiteColumnDefinition,
@@ -233,7 +234,7 @@ function decodeColumnValue<V = any>(args: {
         `Expected datetime column ${columnName} to be a number, got ${typeof value}`
       );
     }
-    return new Date(value) as V;
+    return Temporal.Instant.fromEpochMilliseconds(value) as V;
   }
 
   // For other types, return as is
@@ -241,6 +242,12 @@ function decodeColumnValue<V = any>(args: {
 }
 
 function encodeColumnValue(value: any): any {
+  if (value instanceof Temporal.Instant) {
+    return value.toString();
+  }
+  if (value instanceof Temporal.Duration) {
+    return value.toString();
+  }
   if (value instanceof Date) {
     return value.toISOString();
   }
