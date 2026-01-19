@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   Absurd,
+  Temporal,
   type AbsurdHooks,
   type JsonValue,
   type SQLiteDatabase,
@@ -22,8 +23,8 @@ export interface TaskRow {
   retry_strategy: JsonValue | null;
   max_attempts: number | null;
   cancellation: JsonValue | null;
-  enqueue_at: Date;
-  first_started_at: Date | null;
+  enqueue_at: Temporal.Instant;
+  first_started_at: Temporal.Instant | null;
   state:
     | "pending"
     | "running"
@@ -34,7 +35,7 @@ export interface TaskRow {
   attempts: number;
   last_attempt_run: string | null;
   completed_payload: JsonValue | null;
-  cancelled_at: Date | null;
+  cancelled_at: Temporal.Instant | null;
 }
 
 export interface RunRow {
@@ -49,16 +50,16 @@ export interface RunRow {
     | "failed"
     | "cancelled";
   claimed_by: string | null;
-  claim_expires_at: Date | null;
-  available_at: Date;
+  claim_expires_at: Temporal.Instant | null;
+  available_at: Temporal.Instant;
   wake_event: string | null;
   event_payload: JsonValue | null;
-  started_at: Date | null;
-  completed_at: Date | null;
-  failed_at: Date | null;
+  started_at: Temporal.Instant | null;
+  completed_at: Temporal.Instant | null;
+  failed_at: Temporal.Instant | null;
   result: JsonValue | null;
   failure_reason: JsonValue | null;
-  created_at: Date;
+  created_at: Temporal.Instant;
 }
 
 interface SqliteFixture {

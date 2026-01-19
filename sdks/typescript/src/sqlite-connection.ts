@@ -229,12 +229,17 @@ function decodeColumnValue<V = any>(args: {
   }
 
   if (columnTypeName === "datetime") {
-    if (typeof value !== "number") {
-      throw new Error(
-        `Expected datetime column ${columnName} to be a number, got ${typeof value}`
-      );
+    if (typeof value === "string") {
+      // Handle ISO string format
+      return Temporal.Instant.from(value) as V;
     }
-    return Temporal.Instant.fromEpochMilliseconds(value) as V;
+    if (typeof value === "number") {
+      // Handle epoch milliseconds format
+      return Temporal.Instant.fromEpochMilliseconds(value) as V;
+    }
+    throw new Error(
+      `Expected datetime column ${columnName} to be a string or number, got ${typeof value}`
+    );
   }
 
   // For other types, return as is
