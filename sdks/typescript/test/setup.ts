@@ -5,13 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  Absurd as AbsurdBase,
+  Absurd,
   type AbsurdHooks,
   type JsonValue,
-} from "absurd-sdk";
+  type SQLiteDatabase,
+  type Instant,
+} from "../src/index";
 
-import { SqliteConnection } from "../src/sqlite";
-import type { Absurd, SQLiteDatabase, Instant } from "../src/index";
+import { SQLiteConnection } from "../src/sqlite-connection";
 import {
   instantFromDate,
   instantToEpochMilliseconds,
@@ -68,7 +69,7 @@ export interface RunRow {
 
 interface SqliteFixture {
   db: sqlite.Database;
-  conn: SqliteConnection;
+  conn: SQLiteConnection;
   dbPath: string;
   cleanup: () => void;
 }
@@ -85,7 +86,7 @@ afterAll(() => {
 
 export interface TestContext {
   absurd: Absurd;
-  pool: SqliteConnection;
+  pool: SQLiteConnection;
   queueName: string;
   dbPath: string;
   cleanupTasks(): Promise<void>;
@@ -165,7 +166,7 @@ function createFixture(): SqliteFixture {
   const db = new sqlite(dbPath);
   db.loadExtension(extensionPath);
   db.prepare("select absurd_apply_migrations()").get();
-  const conn = new SqliteConnection(db as unknown as SQLiteDatabase);
+  const conn = new SQLiteConnection(db as SQLiteDatabase);
 
   const cleanup = () => {
     rmSync(tempDir, { recursive: true, force: true });
@@ -180,11 +181,7 @@ export async function createTestAbsurd(
   queueName: string = "default"
 ): Promise<TestContext> {
   const fixture = createFixture();
-  const absurdBase = new AbsurdBase({
-    db: fixture.conn,
-    queueName,
-  });
-  const absurd = absurdBase as unknown as Absurd;
+  const absurd = new Absurd(fixture.conn, { queueName });
 
   await absurd.createQueue(queueName);
 
@@ -252,19 +249,16 @@ export async function createTestAbsurd(
       extendClaim(fixture.conn, runID, extendBySeconds, queueName),
     expectCancelledError: (promise: Promise<unknown>) =>
       expectCancelledError(promise),
-    createClient: (options) => {
-      const client = new AbsurdBase({
-        db: fixture.conn,
+    createClient: (options) =>
+      new Absurd(fixture.conn, {
         queueName: options?.queueName ?? queueName,
         hooks: options?.hooks,
-      });
-      return client as unknown as Absurd;
-    },
+      }),
   };
 }
 
 async function setFakeNow(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   ts: Date | Instant | null
 ): Promise<void> {
   if (ts === null) {
@@ -276,7 +270,7 @@ async function setFakeNow(
 }
 
 async function cleanupTasks(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   queue: string
 ): Promise<void> {
   const tables = [
@@ -292,7 +286,7 @@ async function cleanupTasks(
 }
 
 async function getQueueStorageState(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   queue: string
 ): Promise<{ exists: boolean; tables: string[] }> {
   const { rows } = await conn.query<{ count: number }>(
@@ -309,7 +303,7 @@ async function getQueueStorageState(
 }
 
 async function getTask(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   taskID: string,
   queue: string
 ): Promise<TaskRow | null> {
@@ -336,7 +330,7 @@ async function getTask(
 }
 
 async function getRun(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   runID: string,
   queue: string
 ): Promise<RunRow | null> {
@@ -364,7 +358,7 @@ async function getRun(
 }
 
 async function getRuns(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   taskID: string,
   queue: string
 ): Promise<RunRow[]> {
@@ -393,7 +387,7 @@ async function getRuns(
 }
 
 async function getRemainingTasksCount(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   queue: string
 ): Promise<number> {
   const { rows } = await conn.query<{ count: number }>(
@@ -404,7 +398,7 @@ async function getRemainingTasksCount(
 }
 
 async function getRemainingEventsCount(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   queue: string
 ): Promise<number> {
   const { rows } = await conn.query<{ count: number }>(
@@ -415,7 +409,7 @@ async function getRemainingEventsCount(
 }
 
 async function getWaitsCount(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   queue: string
 ): Promise<number> {
   const { rows } = await conn.query<{ count: number }>(
@@ -426,7 +420,7 @@ async function getWaitsCount(
 }
 
 async function getCheckpoint(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   taskID: string,
   checkpointName: string,
   queue: string
@@ -453,7 +447,7 @@ async function getCheckpoint(
 }
 
 async function scheduleRun(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   runID: string,
   wakeAt: Date | Instant,
   queue: string
@@ -470,7 +464,7 @@ async function scheduleRun(
 }
 
 async function completeRun(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   runID: string,
   payload: JsonValue,
   queue: string
@@ -483,7 +477,7 @@ async function completeRun(
 }
 
 async function cleanupTasksByTTL(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   ttlSeconds: number,
   limit: number,
   queue: string
@@ -496,7 +490,7 @@ async function cleanupTasksByTTL(
 }
 
 async function cleanupEventsByTTL(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   ttlSeconds: number,
   limit: number,
   queue: string
@@ -509,7 +503,7 @@ async function cleanupEventsByTTL(
 }
 
 async function setTaskCheckpointState(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   taskID: string,
   stepName: string,
   state: JsonValue,
@@ -531,7 +525,7 @@ async function setTaskCheckpointState(
 }
 
 async function awaitEventInternal(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   taskID: string,
   runID: string,
   stepName: string,
@@ -547,7 +541,7 @@ async function awaitEventInternal(
 }
 
 async function extendClaim(
-  conn: SqliteConnection,
+  conn: SQLiteConnection,
   runID: string,
   extendBySeconds: number,
   queue: string

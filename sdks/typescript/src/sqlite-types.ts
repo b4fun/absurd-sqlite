@@ -31,7 +31,7 @@ export interface SQLiteStatement<Result extends object = Record<string, any>> {
   readonly: boolean;
   columns(): SQLiteColumnDefinition[];
   all(...args: SQLiteRestBindParams): Result[];
-  run(...args: SQLiteRestBindParams): number;
+  run(...args: SQLiteRestBindParams): unknown;
 }
 
 export interface SQLiteDatabase {

@@ -4,14 +4,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { SqliteConnection } from "../src/sqlite";
+import { SQLiteConnection } from "../src/sqlite-connection";
 import type { SQLiteDatabase } from "../src/sqlite-types";
 import { isInstant, type Instant } from "../src/temporal-types";
 
-describe("SqliteConnection", () => {
+describe("SQLiteConnection", () => {
   it("rewrites postgres-style params and absurd schema names", async () => {
-    const db = new sqlite(":memory:") as unknown as SQLiteDatabase;
-    const conn = new SqliteConnection(db);
+    const db = new sqlite(":memory:") as SQLiteDatabase;
+    const conn = new SQLiteConnection(db);
 
     await conn.exec("CREATE TABLE absurd_tasks (id, name)");
     await conn.exec("INSERT INTO absurd.tasks (id, name) VALUES ($1, $2)", [
@@ -29,8 +29,8 @@ describe("SqliteConnection", () => {
   });
 
   it("throws when query is used for non-reader statements", async () => {
-    const db = new sqlite(":memory:") as unknown as SQLiteDatabase;
-    const conn = new SqliteConnection(db);
+    const db = new sqlite(":memory:") as SQLiteDatabase;
+    const conn = new SQLiteConnection(db);
 
     await expect(conn.query("CREATE TABLE t (id)")).rejects.toThrow(
       "only statements that return data"
@@ -39,8 +39,8 @@ describe("SqliteConnection", () => {
   });
 
   it("decodes JSON from typeless columns", async () => {
-    const db = new sqlite(":memory:") as unknown as SQLiteDatabase;
-    const conn = new SqliteConnection(db);
+    const db = new sqlite(":memory:") as SQLiteDatabase;
+    const conn = new SQLiteConnection(db);
 
     await conn.exec("CREATE TABLE t (payload)");
     await conn.exec("INSERT INTO t (payload) VALUES ($1)", ['{"a":1}']);
@@ -54,8 +54,8 @@ describe("SqliteConnection", () => {
   });
 
   it("decodes JSON from blob columns", async () => {
-    const db = new sqlite(":memory:") as unknown as SQLiteDatabase;
-    const conn = new SqliteConnection(db);
+    const db = new sqlite(":memory:") as SQLiteDatabase;
+    const conn = new SQLiteConnection(db);
 
     await conn.exec("CREATE TABLE t_blob (payload BLOB)");
     await conn.exec("INSERT INTO t_blob (payload) VALUES ($1)", [
@@ -71,8 +71,8 @@ describe("SqliteConnection", () => {
   });
 
   it("decodes datetime columns into Temporal.Instant objects", async () => {
-    const db = new sqlite(":memory:") as unknown as SQLiteDatabase;
-    const conn = new SqliteConnection(db);
+    const db = new sqlite(":memory:") as SQLiteDatabase;
+    const conn = new SQLiteConnection(db);
     const now = Date.now();
 
     await conn.exec("CREATE TABLE t_date (created_at DATETIME)");
@@ -87,12 +87,42 @@ describe("SqliteConnection", () => {
     db.close();
   });
 
+  it("allows custom value codec overrides", async () => {
+    const db = new sqlite(":memory:") as SQLiteDatabase;
+    const encodedValues: unknown[] = [];
+    const conn = new SQLiteConnection(db, {
+      valueCodec: {
+        encodeParam: (value) => {
+          encodedValues.push(value);
+          return value;
+        },
+        decodeColumn: ({ value }) => {
+          if (typeof value === "string") {
+            return value.toUpperCase();
+          }
+          return value;
+        },
+      },
+    });
+
+    await conn.exec("CREATE TABLE t (name TEXT)");
+    await conn.exec("INSERT INTO t (name) VALUES ($1)", ["alpha"]);
+
+    const { rows } = await conn.query<{ name: string }>(
+      "SELECT name FROM t"
+    );
+
+    expect(encodedValues).toEqual(["alpha"]);
+    expect(rows[0]?.name).toBe("ALPHA");
+    db.close();
+  });
+
   it("retries when SQLite reports the database is busy", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "absurd-sqlite-busy-"));
     const dbPath = join(tempDir, "busy.db");
-    const primary = new sqlite(dbPath) as unknown as SQLiteDatabase;
+    const primary = new sqlite(dbPath) as SQLiteDatabase;
     (primary as any).pragma("busy_timeout = 1");
-    const conn = new SqliteConnection(primary);
+    const conn = new SQLiteConnection(primary);
     await conn.exec("CREATE TABLE t_busy (id INTEGER PRIMARY KEY, value TEXT)");
 
     const blocker = new sqlite(dbPath);
@@ -151,7 +181,7 @@ describe("SqliteConnection", () => {
       close: vi.fn(),
       loadExtension: vi.fn(),
     };
-    const conn = new SqliteConnection(db);
+    const conn = new SQLiteConnection(db);
 
     await expect(
       conn.exec("UPDATE locked_table SET value = $1 WHERE id = $2", [1, 1])
