@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterEach } from "bun:test";
-import type { Absurd } from "@absurd-sqlite/sdk";
+import { Temporal, type Absurd } from "@absurd-sqlite/sdk";
 import { createTestAbsurd, randomName, type TestContext } from "./setup";
 
 describe("Retry and cancellation", () => {
@@ -159,7 +159,7 @@ describe("Retry and cancellation", () => {
     const { taskID } = await absurd.spawn("duration-cancel", undefined, {
       maxAttempts: 4,
       retryStrategy: { kind: "fixed", baseSeconds: 30 },
-      cancellation: { maxDuration: 90 },
+      cancellation: { maxDuration: Temporal.Duration.from({ seconds: 90 }) },
     });
 
     await absurd.workBatch("worker1", 60, 1);
@@ -185,7 +185,7 @@ describe("Retry and cancellation", () => {
     });
 
     const { taskID } = await absurd.spawn("delay-cancel", undefined, {
-      cancellation: { maxDelay: 60 },
+      cancellation: { maxDelay: Temporal.Duration.from({ seconds: 60 }) },
     });
 
     await ctx.setFakeNow(new Date(baseTime.getTime() + 61 * 1000));
@@ -312,8 +312,8 @@ describe("Retry and cancellation", () => {
 
     await absurd.cancelTask(taskID);
     const second = await ctx.getTask(taskID);
-    expect(second?.cancelled_at?.getTime()).toBe(
-      first?.cancelled_at?.getTime(),
+    expect(second?.cancelled_at?.epochMilliseconds).toBe(
+      first?.cancelled_at?.epochMilliseconds,
     );
   });
 

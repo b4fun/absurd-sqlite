@@ -7,6 +7,7 @@
       "dependencies": {
         "@absurd-sqlite/sdk": "next",
         "cac": "^6.7.14",
+        "temporal-polyfill": "^0.3.0",
       },
       "devDependencies": {
         "bun-types": "^1.3.6",
@@ -15,7 +16,7 @@
     },
   },
   "packages": {
-    "@absurd-sqlite/sdk": ["@absurd-sqlite/sdk@0.3.0-alpha.0", "", { "peerDependencies": { "better-sqlite3": "^12.5.0" } }, "sha512-6l9FkMg1KvOGxLo5aJYR/BCGn3XgSLVGaVjw0hrtkss44u3hvmYjXZzLZDf0wB1lahzBTWRaAHuhjedqg+uF3Q=="],
+    "@absurd-sqlite/sdk": ["@absurd-sqlite/sdk@0.3.0-alpha.1", "", { "dependencies": { "temporal-polyfill": "^0.3.0" }, "peerDependencies": { "better-sqlite3": "^12.5.0" } }, "sha512-EivuE5Lk61wjHblVsSpZ+QN2v4qIRbJy8e0jWqz8rL3KqP6CLg1+iinKbl4UiNvPs9v+Xwdv6dmoXEwOTIqOKQ=="],
 
     "@types/node": ["@types/node@25.0.3", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-W609buLVRVmeW693xKfzHeIV6nJGGz98uCPfeXI1ELMLXVeKYZ9m15fAMSaUPBHYLGFsVRcMmSCksQOrZV9BYA=="],
 
@@ -92,6 +93,10 @@
     "tar-fs": ["tar-fs@2.1.4", "", { "dependencies": { "chownr": "^1.1.1", "mkdirp-classic": "^0.5.2", "pump": "^3.0.0", "tar-stream": "^2.1.4" } }, "sha512-mDAjwmZdh7LTT6pNleZ05Yt65HC3E+NiQzl672vQG38jIrehtJk/J3mNwIg+vShQPcLF/LV7CMnDW6vjj6sfYQ=="],
 
     "tar-stream": ["tar-stream@2.2.0", "", { "dependencies": { "bl": "^4.0.3", "end-of-stream": "^1.4.1", "fs-constants": "^1.0.0", "inherits": "^2.0.3", "readable-stream": "^3.1.1" } }, "sha512-ujeqbceABgwMZxEJnk2HDY2DlnUZ+9oEcb1KzTVfYHio0UE6dG71n60d8D2I4qNvleWrrXpmjpt7vZeF1LnMZQ=="],
+
+    "temporal-polyfill": ["temporal-polyfill@0.3.0", "", { "dependencies": { "temporal-spec": "0.3.0" } }, "sha512-qNsTkX9K8hi+FHDfHmf22e/OGuXmfBm9RqNismxBrnSmZVJKegQ+HYYXT+R7Ha8F/YSm2Y34vmzD4cxMu2u95g=="],
+
+    "temporal-spec": ["temporal-spec@0.3.0", "", {}, "sha512-n+noVpIqz4hYgFSMOSiINNOUOMFtV5cZQNCmmszA6GiVFVRt3G7AqVyhXjhCSmowvQn+NsGn+jMDMKJYHd3bSQ=="],
 
     "tunnel-agent": ["tunnel-agent@0.6.0", "", { "dependencies": { "safe-buffer": "^5.0.1" } }, "sha512-McnNiV1l8RYeY8tBgEpuodCC1mLUdbSN+CYBL7kJsJNInOP8UjDDEwdk6Mw60vdLLrr5NHKZhMAOSrR2NZuQ+w=="],
 

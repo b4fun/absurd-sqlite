@@ -1,4 +1,4 @@
-import { Absurd, SQLiteConnection, SQLiteDatabase } from "@absurd-sqlite/sdk";
+import { Absurd, SQLiteConnection, SQLiteDatabase, Temporal } from "@absurd-sqlite/sdk";
 import sqlite from "better-sqlite3";
 
 async function main() {
@@ -27,7 +27,7 @@ async function main() {
         return {};
       });
 
-      await ctx.sleepFor("back off 15s", 15);
+      await ctx.sleepFor("back off 15s", Temporal.Duration.from({ seconds: 15 }));
 
       await ctx.step("process", async () => {
         console.log("process step");
