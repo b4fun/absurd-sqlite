@@ -229,8 +229,12 @@ function decodeColumnValue<V = any>(args: {
   }
 
   if (columnTypeName === "datetime") {
+    // SQLite stores datetimes as strings but may return them in different formats
+    // depending on how they were inserted. Support both ISO strings (from
+    // Temporal.Instant.toString() or Date.toISOString()) and epoch milliseconds
+    // (from numeric timestamps).
     if (typeof value === "string") {
-      // Handle ISO string format
+      // Handle ISO string format (e.g., "2024-01-01T00:00:00Z")
       return Temporal.Instant.from(value) as V;
     }
     if (typeof value === "number") {
@@ -247,12 +251,14 @@ function decodeColumnValue<V = any>(args: {
 }
 
 function encodeColumnValue(value: any): any {
+  // Encode Temporal types to ISO string format for SQLite storage
   if (value instanceof Temporal.Instant) {
     return value.toString();
   }
   if (value instanceof Temporal.Duration) {
     return value.toString();
   }
+  // Legacy support for Date objects
   if (value instanceof Date) {
     return value.toISOString();
   }
