@@ -37,6 +37,7 @@
   let taskRuns = $state<TaskRun[]>([]);
   let totalCount = $state(0);
   let expandedId = $state<string | null>(null);
+  let hoveredTaskId = $state<string | null>(null);
   let isReady = $state(false);
   let isLoading = $state(false);
   let limit = $state(defaultLimit);
@@ -50,6 +51,19 @@
   };
   const toggleExpanded = (runId: string) => {
     expandedId = expandedId === runId ? null : runId;
+  };
+  const applyTaskNameFilter = (name: string) => {
+    selectedTaskName = name;
+    if (activeSearch || searchTerm) {
+      activeSearch = "";
+      searchTerm = "";
+      updateQuery({ q: null });
+    }
+  };
+  const applyTaskIdFilter = (taskId: string) => {
+    searchTerm = taskId;
+    activeSearch = taskId;
+    updateQuery({ q: taskId });
   };
   const handleSearchInput = (event: Event) => {
     const target = event.currentTarget as HTMLInputElement | null;
@@ -251,7 +265,7 @@
       {#if totalCount === 0}
         Showing 0 tasks
       {:else}
-        Showing 1–{taskRuns.length} of {totalCount} tasks
+        Showing 1–{taskRuns.length} of {totalCount} task runs
       {/if}
     </span>
     {#if isLoading}
@@ -269,12 +283,11 @@
     <table class="min-w-full border-collapse text-left text-sm">
       <thead class="bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-600">
         <tr>
-          <th class="px-4 py-3">Task ID</th>
+          <th class="px-4 py-3">Task Run</th>
           <th class="px-4 py-3">Task Name</th>
           <th class="px-4 py-3">Queue</th>
           <th class="px-4 py-3">Status</th>
           <th class="px-4 py-3">Attempt</th>
-          <th class="px-4 py-3">Run ID</th>
           <th class="px-4 py-3">Age</th>
           <th class="px-4 py-3"></th>
         </tr>
@@ -285,7 +298,26 @@
             class="border-t border-black/5 hover:bg-slate-50 hover:cursor-pointer"
             onclick={() => toggleExpanded(run.runId)}
           >
-            <td class="px-4 py-3 font-mono text-xs text-slate-600">{run.id}</td>
+            <td class="px-4 py-3">
+              <div class="flex flex-col gap-1">
+                <span class="font-mono text-xs text-slate-700">run: {run.runId}</span>
+                <span
+                  class={`w-fit font-mono text-[10px] ${
+                    hoveredTaskId === run.id
+                      ? "rounded bg-amber-50 px-1 text-amber-700"
+                      : "text-slate-500"
+                  }`}
+                  onmouseenter={() => {
+                    hoveredTaskId = run.id;
+                  }}
+                  onmouseleave={() => {
+                    hoveredTaskId = null;
+                  }}
+                >
+                  task: {run.id}
+                </span>
+              </div>
+            </td>
             <td class="px-4 py-3 text-slate-800">{run.name}</td>
             <td class="px-4 py-3 text-slate-600">{run.queue}</td>
             <td class="px-4 py-3">
@@ -296,13 +328,12 @@
               </span>
             </td>
             <td class="px-4 py-3 text-slate-600">{run.attempt}</td>
-            <td class="px-4 py-3 font-mono text-xs text-slate-600">{run.runId}</td>
             <td class="px-4 py-3 text-slate-600">{run.age}</td>
             <td class="px-4 py-3 text-slate-600">{expandedId === run.runId ? "▲" : "▼"}</td>
           </tr>
           {#if expandedId === run.runId}
             <tr class="border-t border-black/10 bg-white">
-              <td colspan="8" class="px-4 py-4">
+              <td colspan="7" class="px-4 py-4">
                 <div class="mt-4">
                   <div class="flex items-center justify-between">
                     <h3 class="text-sm font-semibold text-slate-800">Basic Information</h3>
@@ -329,9 +360,13 @@
                     <div class="flex gap-2">
                       <dt class="text-slate-500">Task Name:</dt>
                       <dd>
-                        <a href={`/tasks/${run.id}`} class="text-slate-700 hover:underline">
+                        <button
+                          type="button"
+                          class="cursor-pointer text-left text-slate-700 hover:underline"
+                          onclick={() => applyTaskNameFilter(run.name)}
+                        >
                           {run.name}
-                        </a>
+                        </button>
                       </dd>
                     </div>
                     <div class="flex gap-2">
@@ -341,12 +376,19 @@
                     <div class="flex gap-2">
                       <dt class="text-slate-500">Task ID:</dt>
                       <dd>
-                        <a
-                          href={`/tasks/${run.id}`}
-                          class="rounded bg-blue-50 px-1 py-0.5 font-mono text-xs text-blue-700 hover:underline"
+                        <button
+                          type="button"
+                          class="cursor-pointer rounded bg-blue-50 px-1 py-0.5 text-left font-mono text-xs text-blue-700 hover:underline"
+                          onclick={() => applyTaskIdFilter(run.id)}
+                          onmouseenter={() => {
+                            hoveredTaskId = run.id;
+                          }}
+                          onmouseleave={() => {
+                            hoveredTaskId = null;
+                          }}
                         >
                           {run.id}
-                        </a>
+                        </button>
                       </dd>
                     </div>
                     <div class="flex gap-2">
