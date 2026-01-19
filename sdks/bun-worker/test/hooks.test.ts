@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterEach } from "bun:test";
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { Absurd, SpawnOptions } from "absurd-sdk";
+import type { Absurd, SpawnOptions } from "@absurd-sqlite/sdk";
 import { createTestAbsurd, randomName, type TestContext } from "./setup";
 
 describe("Hooks", () => {

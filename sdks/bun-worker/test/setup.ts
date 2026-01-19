@@ -8,7 +8,7 @@ import {
   Absurd,
   type AbsurdHooks,
   type JsonValue,
-} from "absurd-sdk";
+} from "@absurd-sqlite/sdk";
 
 import { BunSqliteConnection } from "../src/sqlite";
 
@@ -263,10 +263,7 @@ export async function createTestAbsurd(
   queueName: string = "default"
 ): Promise<TestContext> {
   const fixture = createFixture();
-  const absurd = new Absurd({
-    db: fixture.conn,
-    queueName,
-  });
+  const absurd = new Absurd(fixture.conn, { queueName });
 
   await absurd.createQueue(queueName);
 
@@ -335,8 +332,7 @@ export async function createTestAbsurd(
     expectCancelledError: (promise: Promise<unknown>) =>
       expectCancelledError(promise),
     createClient: (options) => {
-      const client = new Absurd({
-        db: fixture.conn,
+      const client = new Absurd(fixture.conn, {
         queueName: options?.queueName ?? queueName,
         hooks: options?.hooks,
       });

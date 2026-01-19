@@ -1,12 +1,15 @@
-import { Absurd, type WorkerOptions } from "absurd-sdk";
 import { Database } from "bun:sqlite";
-import type { AbsurdClient } from "@absurd-sqlite/sdk";
+import {
+  Absurd,
+  type AbsurdClient,
+  type WorkerOptions,
+} from "@absurd-sqlite/sdk";
 import { cac } from "cac";
 
 import { BunSqliteConnection } from "./sqlite";
 
 export type { AbsurdClient } from "@absurd-sqlite/sdk";
-export type { WorkerOptions } from "absurd-sdk";
+export type { WorkerOptions } from "@absurd-sqlite/sdk";
 
 export {
   downloadExtension,
@@ -101,12 +104,10 @@ export default async function run(setupFunction: SetupFunction): Promise<void> {
   }
 
   const db = new Database(dbPath);
-  (db as unknown as { loadExtension(path: string): void }).loadExtension(
-    extensionPath
-  );
+  db.loadExtension(extensionPath);
 
   const conn = new BunSqliteConnection(db);
-  const absurd = new Absurd({ db: conn });
+  const absurd = new Absurd(conn);
 
   await setupFunction(absurd);
 

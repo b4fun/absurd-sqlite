@@ -26,12 +26,14 @@ describe("BunSqliteConnection", () => {
     db.close();
   });
 
-  it("returns empty rows for non-reader statements", async () => {
+  it("throws when query is used for non-reader statements", async () => {
     const db = new Database(":memory:");
     const conn = new BunSqliteConnection(db);
 
-    const { rows } = await conn.query("CREATE TABLE t (id)");
-    expect(rows).toEqual([]);
+    await expect(conn.query("CREATE TABLE t (id)")).rejects.toThrow(
+      "only statements that return data"
+    );
+    await conn.exec("CREATE TABLE t (id)");
 
     await conn.exec("INSERT INTO t (id) VALUES ($1)", [1]);
     const { rows: inserted } = await conn.query<{ id: number }>(
@@ -146,14 +148,14 @@ describe("BunSqliteConnection", () => {
       }),
     };
 
-    const querySpy = jest.fn().mockReturnValue(statement as any);
-    const db = { query: querySpy } as unknown as Database;
+    const prepareSpy = jest.fn().mockReturnValue(statement as any);
+    const db = { prepare: prepareSpy } as unknown as Database;
     const conn = new BunSqliteConnection(db);
 
     await expect(
       conn.exec("UPDATE locked_table SET value = $1 WHERE id = $2", [1, 1])
     ).resolves.toBeUndefined();
     expect(statement.run).toHaveBeenCalledTimes(2);
-    expect(querySpy).toHaveBeenCalledTimes(1);
+    expect(prepareSpy).toHaveBeenCalledTimes(1);
   });
 });

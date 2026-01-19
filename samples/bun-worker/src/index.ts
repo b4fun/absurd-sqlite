@@ -16,6 +16,7 @@ await run(async (absurd) => {
       await ctx.step("init", async () => {
         console.log("init step");
         ctx.emitEvent("progress", { message: "Initialization complete" });
+        return {};
       });
 
       await ctx.sleepFor("back off 15s", 15);
@@ -23,6 +24,7 @@ await run(async (absurd) => {
       await ctx.step("process", async () => {
         console.log("process step");
         ctx.emitEvent("progress", { message: "Processing complete" });
+        return {};
       });
 
       const name = params.name || "world";

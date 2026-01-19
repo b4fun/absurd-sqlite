@@ -7,7 +7,7 @@ import {
   jest,
 } from "bun:test";
 import assert from "node:assert/strict";
-import type { Absurd } from "absurd-sdk";
+import type { Absurd } from "@absurd-sqlite/sdk";
 import { createTestAbsurd, randomName, type TestContext } from "./setup";
 import { EventEmitter, once } from "events";
 import { waitFor } from "./wait-for";

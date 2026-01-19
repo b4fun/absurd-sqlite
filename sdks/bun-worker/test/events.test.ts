@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterEach } from "bun:test";
-import type { Absurd } from "absurd-sdk";
+import type { Absurd } from "@absurd-sqlite/sdk";
 import { createTestAbsurd, randomName, type TestContext } from "./setup";
-import { TimeoutError } from "absurd-sdk";
+import { TimeoutError } from "@absurd-sqlite/sdk";
 
 describe("Event system", () => {
   let ctx: TestContext;
