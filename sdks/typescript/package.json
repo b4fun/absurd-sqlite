@@ -1,6 +1,6 @@
 {
   "name": "@absurd-sqlite/sdk",
-  "version": "0.2.1-alpha.2",
+  "version": "0.3.0-alpha.0",
   "description": "TypeScript SDK for Absurd-SQLite - SQLite-based durable task execution",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
