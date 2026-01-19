@@ -3,7 +3,6 @@ import {
   type AbsurdOptions as AbsurdImplOptions,
   type ClaimedTask,
   type JsonValue,
-  type Queryable,
   type SpawnOptions,
   type SpawnResult,
   type TaskHandler,

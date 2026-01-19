@@ -1,6 +1,6 @@
 /*
  * This file is derived from the Absurd TypeScript SDK:
- * https://github.com/earendil-works/absurd/tree/main/sdks/typescript
+ * https://github.com/earendil-works/absurd/blob/d68d5dd23a29b45240f156d78ccf98d39ffce744/sdks/typescript/src/index.ts
  *
  * Original work Copyright (c) earendil-works.
  * Licensed under the Apache License, Version 2.0.
