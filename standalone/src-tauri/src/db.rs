@@ -1,10 +1,6 @@
 use anyhow::{Context, Result};
-use reqwest::blocking::Client;
 use rusqlite::Connection;
-use serde::Deserialize;
 use serde_json::Value;
-use std::env;
-use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_cli::ArgData;
@@ -122,17 +118,6 @@ pub fn extension_path(app_handle: &AppHandle) -> Result<String> {
 
 fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
     let lib_name = extension_lib_name();
-    if let Ok(path) = env::var("ABSURD_SQLITE_EXTENSION_PATH") {
-        let path = PathBuf::from(path);
-        if path.exists() {
-            log::info!("Using SQLite extension from env at {}", path.display());
-            return Some(path);
-        }
-        log::warn!(
-            "SQLite extension path from env does not exist: {}",
-            path.display()
-        );
-    }
     #[cfg(debug_assertions)]
     {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -155,9 +140,26 @@ fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
         }
     }
 
-    match download_extension(app_handle) {
-        Ok(path) => return Some(path),
-        Err(err) => log::warn!("Failed to download SQLite extension: {:#}", err),
+    match app_handle.path().resource_dir() {
+        Ok(resource_dir) => {
+            let resource_path = resource_dir.join("resources").join(&lib_name);
+            log::debug!(
+                "Checking resource SQLite extension at {}",
+                resource_path.display()
+            );
+            if resource_path.exists() {
+                log::info!(
+                    "Using resource SQLite extension at {}",
+                    resource_path.display()
+                );
+                return Some(resource_path);
+            }
+            log::warn!(
+                "SQLite extension not found in resources at {}",
+                resource_path.display()
+            );
+        }
+        Err(err) => log::warn!("Failed to resolve resource directory: {}", err),
     }
 
     #[cfg(debug_assertions)]
@@ -189,116 +191,4 @@ fn extension_lib_name() -> String {
     } else {
         "libabsurd.so".to_string()
     }
-}
-
-struct PlatformInfo {
-    os: &'static str,
-    arch: &'static str,
-    ext: &'static str,
-}
-
-#[derive(Deserialize)]
-struct ReleaseInfo {
-    tag_name: String,
-    draft: bool,
-}
-
-fn download_extension(app_handle: &AppHandle) -> Result<PathBuf> {
-    let owner = "b4fun";
-    let repo = "absurd-sqlite";
-
-    let client = Client::builder()
-        .user_agent("absurd-sqlite-standalone")
-        .build()
-        .context("build GitHub HTTP client")?;
-
-    let version = fetch_latest_version(&client, owner, repo)?;
-    let platform = platform_info()?;
-    let asset_name = asset_name(&version, &platform);
-    let tag = format!("absurd-sqlite-extension/{}", version);
-
-    let cache_dir = app_handle
-        .path()
-        .app_cache_dir()
-        .context("resolve app cache dir")?
-        .join("absurd-sqlite")
-        .join("extensions")
-        .join(&version);
-    fs::create_dir_all(&cache_dir).context("create extension cache dir")?;
-
-    let cached_path = cache_dir.join(extension_lib_name());
-    if cached_path.exists() {
-        log::info!("Using cached SQLite extension at {}", cached_path.display());
-        return Ok(cached_path);
-    }
-
-    let url = format!("https://github.com/{owner}/{repo}/releases/download/{tag}/{asset_name}");
-    log::info!("Downloading SQLite extension from {}", url);
-    let response = client
-        .get(url)
-        .send()
-        .context("request extension asset")?
-        .error_for_status()
-        .context("download extension asset")?;
-    let bytes = response.bytes().context("read extension bytes")?;
-    fs::write(&cached_path, bytes).context("write extension to cache")?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let permissions = fs::Permissions::from_mode(0o755);
-        fs::set_permissions(&cached_path, permissions).context("chmod extension")?;
-    }
-
-    Ok(cached_path)
-}
-
-fn fetch_latest_version(client: &Client, owner: &str, repo: &str) -> Result<String> {
-    let url = format!("https://api.github.com/repos/{owner}/{repo}/releases");
-    let releases = client
-        .get(url)
-        .send()
-        .context("fetch releases")?
-        .error_for_status()
-        .context("download releases")?
-        .json::<Vec<ReleaseInfo>>()
-        .context("parse releases")?;
-
-    for release in releases {
-        if !release.draft && release.tag_name.starts_with("absurd-sqlite-extension/") {
-            return Ok(release
-                .tag_name
-                .trim_start_matches("absurd-sqlite-extension/")
-                .to_string());
-        }
-    }
-
-    Err(anyhow::anyhow!("No extension releases found"))
-}
-
-fn platform_info() -> Result<PlatformInfo> {
-    let (os, ext) = if cfg!(target_os = "macos") {
-        ("macOS", "dylib")
-    } else if cfg!(target_os = "linux") {
-        ("Linux", "so")
-    } else if cfg!(target_os = "windows") {
-        ("Windows", "dll")
-    } else {
-        return Err(anyhow::anyhow!("Unsupported platform"));
-    };
-
-    let arch = match env::consts::ARCH {
-        "x86_64" => "X64",
-        "aarch64" => "ARM64",
-        other => return Err(anyhow::anyhow!("Unsupported architecture: {}", other)),
-    };
-
-    Ok(PlatformInfo { os, arch, ext })
-}
-
-fn asset_name(version: &str, platform: &PlatformInfo) -> String {
-    format!(
-        "absurd-absurd-sqlite-extension-{}-{}-{}.{}",
-        version, platform.os, platform.arch, platform.ext
-    )
 }
