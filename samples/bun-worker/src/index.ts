@@ -1,4 +1,4 @@
-import run from "@absurd-sqlite/bun-worker";
+import run, { Temporal } from "@absurd-sqlite/bun-worker";
 import { Database } from "bun:sqlite";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -19,7 +19,7 @@ await run(async (absurd) => {
         return {};
       });
 
-      await ctx.sleepFor("back off 15s", 15);
+      await ctx.sleepFor("back off 15s", Temporal.Duration.from({ seconds: 15 }));
 
       await ctx.step("process", async () => {
         console.log("process step");
