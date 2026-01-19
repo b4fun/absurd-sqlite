@@ -1,27 +1,67 @@
-import type { Queryable } from "./absurd-types";
+import type { Queryable } from "./absurd";
 import type {
-  SQLiteRestBindParams,
+  SQLiteColumnDefinition,
   SQLiteDatabase,
   SQLiteStatement,
   SQLiteVerboseLog,
+  SQLiteBindValue,
 } from "./sqlite-types";
 
-export class SqliteConnection implements Queryable {
+/**
+ * Hooks for encoding parameters and decoding query results.
+ * Useful when SQLite drivers expose different value representations.
+ */
+export interface SQLiteValueCodec {
+  encodeParam?: (value: SQLiteBindValue) => SQLiteBindValue;
+  decodeColumn?: (args: {
+    value: unknown;
+    columnName: string;
+    columnType: string | null;
+    verbose?: SQLiteVerboseLog;
+  }) => unknown;
+  decodeRow?: (args: {
+    row: Record<string, unknown>;
+    columns: SQLiteColumnDefinition[];
+    decodeColumn: NonNullable<SQLiteValueCodec["decodeColumn"]>;
+    verbose?: SQLiteVerboseLog;
+  }) => Record<string, unknown>;
+}
+
+/**
+ * Configuration options for SQLiteConnection.
+ */
+export interface SQLiteConnectionOptions {
+  valueCodec?: SQLiteValueCodec;
+  verbose?: SQLiteVerboseLog;
+}
+
+/**
+ * SQLite adapter that rewrites Absurd's SQL to SQLite syntax and handles retries.
+ */
+export class SQLiteConnection implements Queryable {
   private readonly db: SQLiteDatabase;
   private readonly maxRetries = 5;
   private readonly baseRetryDelayMs = 50;
+  private readonly codec: Required<Pick<SQLiteValueCodec, "encodeParam" | "decodeColumn">> &
+    Pick<SQLiteValueCodec, "decodeRow">;
+  private readonly verbose?: SQLiteVerboseLog;
 
-  constructor(db: SQLiteDatabase) {
+  constructor(db: SQLiteDatabase, options: SQLiteConnectionOptions = {}) {
     this.db = db;
-    // TODO: verbose logging
+    this.codec = {
+      encodeParam: options.valueCodec?.encodeParam ?? encodeColumnValue,
+      decodeColumn: options.valueCodec?.decodeColumn ?? decodeColumnValue,
+      decodeRow: options.valueCodec?.decodeRow,
+    };
+    this.verbose = options.verbose;
   }
 
   async query<R extends object = Record<string, any>>(
     sql: string,
-    params?: SQLiteRestBindParams
+    params?: unknown[] | Record<string, unknown>
   ): Promise<{ rows: R[] }> {
     const sqliteQuery = rewritePostgresQuery(sql);
-    const sqliteParams = rewritePostgresParams(params);
+    const sqliteParams = rewritePostgresParams(params, this.codec.encodeParam);
 
     const statement = this.db.prepare(sqliteQuery);
     if (!statement.readonly) {
@@ -30,21 +70,29 @@ export class SqliteConnection implements Queryable {
       throw new Error("The query() method is only statements that return data");
     }
 
-    const rowsDecoded = await this.runWithRetry(() =>
-      statement
-        .all(sqliteParams)
-        .map((row) => decodeRowValues(statement, row))
-    );
+    const rowsDecoded = await this.runWithRetry(() => {
+      const rows = statement.all(sqliteParams);
+      return rows.map((row) =>
+        decodeRowValues(statement, row, this.codec, this.verbose)
+      );
+    });
 
     return { rows: rowsDecoded };
   }
 
-  async exec(sql: string, params?: SQLiteRestBindParams): Promise<void> {
+  async exec(
+    sql: string,
+    params?: unknown[] | Record<string, unknown>
+  ): Promise<void> {
     const sqliteQuery = rewritePostgresQuery(sql);
-    const sqliteParams = rewritePostgresParams(params);
+    const sqliteParams = rewritePostgresParams(params, this.codec.encodeParam);
 
     const statement = this.db.prepare(sqliteQuery);
     await this.runWithRetry(() => statement.run(sqliteParams));
+  }
+
+  close(): void {
+    this.db.close();
   }
 
   private async runWithRetry<T>(operation: () => T): Promise<T> {
@@ -71,53 +119,74 @@ function rewritePostgresQuery(text: string): string {
     .replace(/absurd\.(\w+)/g, "absurd_$1");
 }
 
-function rewritePostgresParams<I = any>(
-  params?: SQLiteRestBindParams
-): Record<string, I> {
+function rewritePostgresParams(
+  params: unknown[] | Record<string, unknown> | undefined,
+  encodeParam: (value: SQLiteBindValue) => SQLiteBindValue
+): Record<string, SQLiteBindValue> {
   if (!params) {
     return {};
   }
 
-  const rewrittenParams: Record<string, I> = {};
-  params.forEach((value, index) => {
-    const paramKey = `${namedParamPrefix}${index + 1}`;
-    const encodedParamValue = encodeColumnValue(value);
+  const rewrittenParams: Record<string, SQLiteBindValue> = {};
+  if (Array.isArray(params)) {
+    params.forEach((value, index) => {
+      const paramKey = `${namedParamPrefix}${index + 1}`;
+      const encodedParamValue = encodeParam(value as SQLiteBindValue);
 
-    rewrittenParams[paramKey] = encodedParamValue;
-  });
+      rewrittenParams[paramKey] = encodedParamValue;
+    });
+    return rewrittenParams;
+  }
+
+  for (const [key, value] of Object.entries(params)) {
+    rewrittenParams[key] = encodeParam(value as SQLiteBindValue);
+  }
   return rewrittenParams;
 }
 
 function decodeRowValues<U extends object, R extends object = any>(
   statement: SQLiteStatement,
   row: U,
+  codec: Required<Pick<SQLiteValueCodec, "decodeColumn">> &
+    Pick<SQLiteValueCodec, "decodeRow">,
   verbose?: SQLiteVerboseLog
 ): R {
   const columns = statement.columns();
+  const rowRecord = row as Record<string, unknown>;
+
+  if (codec.decodeRow) {
+    return codec.decodeRow({
+      row: rowRecord,
+      columns,
+      decodeColumn: codec.decodeColumn,
+      verbose,
+    }) as R;
+  }
 
   const decodedRow: any = {};
   for (const column of columns) {
     const columnName = column.name;
     const columnType = column.type;
-    const rawValue = (row as Record<string, unknown>)[columnName];
-    const decodedValue = decodeColumnValue(
-      rawValue,
+    const rawValue = rowRecord[columnName];
+    const decodedValue = codec.decodeColumn({
+      value: rawValue,
       columnName,
       columnType,
-      verbose
-    );
+      verbose,
+    });
     decodedRow[columnName] = decodedValue;
   }
 
   return decodedRow as R;
 }
 
-function decodeColumnValue<V = any>(
-  value: unknown | V,
-  columnName: string,
-  columnType: string | null,
-  verbose?: SQLiteVerboseLog
-): V | null {
+function decodeColumnValue<V = any>(args: {
+  value: unknown | V;
+  columnName: string;
+  columnType: string | null;
+  verbose?: SQLiteVerboseLog;
+}): V | null {
+  const { value, columnName, columnType, verbose } = args;
   if (value === null || value === undefined) {
     return null;
   }

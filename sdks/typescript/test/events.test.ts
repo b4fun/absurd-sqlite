@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterEach } from "vitest";
 import { createTestAbsurd, randomName, type TestContext } from "./setup.js";
 import type { Absurd } from "../src/index.js";
-import { TimeoutError } from "absurd-sdk";
+import { TimeoutError } from "../src/index.js";
 
 describe("Event system", () => {
   let ctx: TestContext;
