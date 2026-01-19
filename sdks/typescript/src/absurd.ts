@@ -8,6 +8,7 @@
  * Modifications Copyright (c) absurd-sqlite contributors.
  */
 import * as os from "node:os";
+import { Temporal } from "temporal-polyfill";
 
 /**
  * Minimal query interface compatible with Absurd's database operations.
@@ -39,8 +40,8 @@ export interface RetryStrategy {
 }
 
 export interface CancellationPolicy {
-  maxDuration?: number;
-  maxDelay?: number;
+  maxDuration?: Temporal.Duration;
+  maxDelay?: Temporal.Duration;
 }
 
 export interface SpawnOptions {
@@ -315,12 +316,14 @@ export class TaskContext {
   }
 
   /**
-   * Suspends the task until the given duration (seconds) elapses.
+   * Suspends the task until the given duration elapses.
    * @param stepName Checkpoint name for this wait.
-   * @param duration Duration to wait in seconds.
+   * @param duration Duration to wait.
    */
-  async sleepFor(stepName: string, duration: number): Promise<void> {
-    return await this.sleepUntil(stepName, new Date(Date.now() + duration * 1000));
+  async sleepFor(stepName: string, duration: Temporal.Duration): Promise<void> {
+    const now = Temporal.Now.instant();
+    const wakeAt = now.add(duration);
+    return await this.sleepUntil(stepName, wakeAt);
   }
 
   /**
@@ -328,14 +331,14 @@ export class TaskContext {
    * @param stepName Checkpoint name for this wait.
    * @param wakeAt Absolute time when the task should resume.
    */
-  async sleepUntil(stepName: string, wakeAt: Date): Promise<void> {
+  async sleepUntil(stepName: string, wakeAt: Temporal.Instant): Promise<void> {
     const checkpointName = this.getCheckpointName(stepName);
     const state = await this.lookupCheckpoint(checkpointName);
-    const actualWakeAt = typeof state === "string" ? new Date(state) : wakeAt;
+    const actualWakeAt = typeof state === "string" ? Temporal.Instant.from(state) : wakeAt;
     if (!state) {
-      await this.persistCheckpoint(checkpointName, wakeAt.toISOString());
+      await this.persistCheckpoint(checkpointName, wakeAt.toString());
     }
-    if (Date.now() < actualWakeAt.getTime()) {
+    if (Temporal.Instant.compare(Temporal.Now.instant(), actualWakeAt) < 0) {
       await this.scheduleRun(actualWakeAt);
       throw new SuspendTask();
     }
@@ -389,7 +392,7 @@ export class TaskContext {
     this.recordLeaseExtension(this.claimTimeout);
   }
 
-  private async scheduleRun(wakeAt: Date): Promise<void> {
+  private async scheduleRun(wakeAt: Temporal.Instant): Promise<void> {
     await this.con.query(`SELECT absurd.schedule_run($1, $2, $3)`, [
       this.queueName,
       this.task.run_id,
@@ -398,24 +401,20 @@ export class TaskContext {
   }
 
   /**
-   * Waits for an event by name and returns its payload; optionally sets a custom step name and timeout (seconds).
+   * Waits for an event by name and returns its payload; optionally sets a custom step name and timeout.
    * @param eventName Event identifier to wait for.
    * @param options.stepName Optional checkpoint name (defaults to $awaitEvent:<eventName>).
-   * @param options.timeout Optional timeout in seconds.
+   * @param options.timeout Optional timeout duration.
    * @throws TimeoutError If the event is not received before the timeout.
    */
   async awaitEvent(
     eventName: string,
-    options?: { stepName?: string; timeout?: number }
+    options?: { stepName?: string; timeout?: Temporal.Duration }
   ): Promise<JsonValue> {
     const stepName = options?.stepName || `$awaitEvent:${eventName}`;
     let timeout: number | null = null;
-    if (
-      options?.timeout !== undefined &&
-      Number.isFinite(options?.timeout) &&
-      options?.timeout >= 0
-    ) {
-      timeout = Math.floor(options?.timeout);
+    if (options?.timeout !== undefined) {
+      timeout = Math.floor(options.timeout.total("seconds"));
     }
     const checkpointName = this.getCheckpointName(stepName);
     const cached = await this.lookupCheckpoint(checkpointName);
@@ -1022,10 +1021,10 @@ function normalizeCancellation(
   }
   const normalized: JsonObject = {};
   if (policy.maxDuration !== undefined) {
-    normalized.max_duration = policy.maxDuration;
+    normalized.max_duration = Math.floor(policy.maxDuration.total("seconds"));
   }
   if (policy.maxDelay !== undefined) {
-    normalized.max_delay = policy.maxDelay;
+    normalized.max_delay = Math.floor(policy.maxDelay.total("seconds"));
   }
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }

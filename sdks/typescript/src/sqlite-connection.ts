@@ -1,3 +1,4 @@
+import { Temporal } from "temporal-polyfill";
 import type { Queryable } from "./absurd";
 import type {
   SQLiteColumnDefinition,
@@ -228,12 +229,21 @@ function decodeColumnValue<V = any>(args: {
   }
 
   if (columnTypeName === "datetime") {
-    if (typeof value !== "number") {
-      throw new Error(
-        `Expected datetime column ${columnName} to be a number, got ${typeof value}`
-      );
+    // SQLite stores datetimes as strings but may return them in different formats
+    // depending on how they were inserted. Support both ISO strings (from
+    // Temporal.Instant.toString() or Date.toISOString()) and epoch milliseconds
+    // (from numeric timestamps).
+    if (typeof value === "string") {
+      // Handle ISO string format (e.g., "2024-01-01T00:00:00Z")
+      return Temporal.Instant.from(value) as V;
     }
-    return new Date(value) as V;
+    if (typeof value === "number") {
+      // Handle epoch milliseconds format
+      return Temporal.Instant.fromEpochMilliseconds(value) as V;
+    }
+    throw new Error(
+      `Expected datetime column ${columnName} to be a string or number, got ${typeof value}`
+    );
   }
 
   // For other types, return as is
@@ -241,6 +251,14 @@ function decodeColumnValue<V = any>(args: {
 }
 
 function encodeColumnValue(value: any): any {
+  // Encode Temporal types to ISO string format for SQLite storage
+  if (value instanceof Temporal.Instant) {
+    return value.toString();
+  }
+  if (value instanceof Temporal.Duration) {
+    return value.toString();
+  }
+  // Legacy support for Date objects
   if (value instanceof Date) {
     return value.toISOString();
   }

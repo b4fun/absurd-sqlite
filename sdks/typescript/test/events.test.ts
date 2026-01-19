@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterEach } from "vitest";
 import { createTestAbsurd, randomName, type TestContext } from "./setup.js";
 import type { Absurd } from "../src/index.js";
-import { TimeoutError } from "../src/index.js";
+import { TimeoutError, Temporal } from "../src/index.js";
 
 describe("Event system", () => {
   let ctx: TestContext;
@@ -21,7 +21,7 @@ describe("Event system", () => {
     const eventName = randomName("test_event");
 
     absurd.registerTask({ name: "waiter" }, async (params, ctx) => {
-      const payload = await ctx.awaitEvent(eventName, { timeout: 60 });
+      const payload = await ctx.awaitEvent(eventName, { timeout: Temporal.Duration.from({ seconds: 60 }) });
       return { received: payload };
     });
 
@@ -86,7 +86,7 @@ describe("Event system", () => {
     absurd.registerTask({ name: "timeout-waiter" }, async (_params, ctx) => {
       try {
         const payload = await ctx.awaitEvent(eventName, {
-          timeout: timeoutSeconds,
+          timeout: Temporal.Duration.from({ seconds: timeoutSeconds }),
         });
         return { timedOut: false, result: payload };
       } catch (err) {
@@ -109,7 +109,7 @@ describe("Event system", () => {
       wake_event: eventName,
     });
     const expectedWake = new Date(baseTime.getTime() + timeoutSeconds * 1000);
-    expect(sleepingRun?.available_at?.getTime()).toBe(expectedWake.getTime());
+    expect(sleepingRun?.available_at?.epochMilliseconds).toBe(expectedWake.getTime());
 
     await ctx.setFakeNow(new Date(expectedWake.getTime() + 1000));
     await absurd.workBatch("worker1", 120, 1);
@@ -170,13 +170,13 @@ describe("Event system", () => {
 
     absurd.registerTask({ name: "timeout-no-loop" }, async (_params, ctx) => {
       try {
-        await ctx.awaitEvent(eventName, { stepName: "wait", timeout: 10 });
+        await ctx.awaitEvent(eventName, { stepName: "wait", timeout: Temporal.Duration.from({ seconds: 10 }) });
         return { stage: "unexpected" };
       } catch (err) {
         if (err instanceof TimeoutError) {
           const payload = await ctx.awaitEvent(eventName, {
             stepName: "wait",
-            timeout: 10,
+            timeout: Temporal.Duration.from({ seconds: 10 }),
           });
           return { stage: "resumed", payload };
         }
