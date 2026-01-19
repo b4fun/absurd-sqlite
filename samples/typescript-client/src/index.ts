@@ -1,4 +1,4 @@
-import { Absurd, SQLiteDatabase } from "@absurd-sqlite/sdk";
+import { Absurd, SQLiteConnection, SQLiteDatabase } from "@absurd-sqlite/sdk";
 import sqlite from "better-sqlite3";
 
 async function main() {
@@ -9,9 +9,12 @@ async function main() {
       "ABSURD_DATABASE_EXTENSION_PATH and ABSURD_DATABASE_PATH must be set",
     );
   }
-  const db = sqlite(dbPath) as unknown as SQLiteDatabase;
+  const db = sqlite(dbPath) as SQLiteDatabase;
+  db.loadExtension(extensionPath);
+  db.prepare("select absurd_apply_migrations()").run();
+  const conn = new SQLiteConnection(db, { verbose: console.log });
 
-  const absurd = new Absurd(db, extensionPath);
+  const absurd = new Absurd(conn);
 
   absurd.registerTask(
     {
@@ -21,6 +24,7 @@ async function main() {
       await ctx.step("init", async () => {
         console.log("init step");
         ctx.emitEvent("progress", { message: "Initialization complete" });
+        return {};
       });
 
       await ctx.sleepFor("back off 15s", 15);
@@ -28,6 +32,7 @@ async function main() {
       await ctx.step("process", async () => {
         console.log("process step");
         ctx.emitEvent("progress", { message: "Processing complete" });
+        return {};
       });
 
       const name = params.name || "world";
