@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterEach, jest } from "bun:test";
-import type { Absurd } from "absurd-sdk";
+import type { Absurd } from "@absurd-sqlite/sdk";
 import { createTestAbsurd, randomName, type TestContext } from "./setup";
 
 describe("Step functionality", () => {

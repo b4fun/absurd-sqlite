@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "bun:test";
-import { Absurd } from "absurd-sdk";
+import { Absurd } from "@absurd-sqlite/sdk";
 
 import { BunSqliteConnection } from "../src/sqlite";
 import { loadExtension } from "./setup";
@@ -29,7 +29,7 @@ describe("Absurd", () => {
   it("creates and lists queues using the sqlite extension", async () => {
     const db = createDatabaseWithMigrations();
     const conn = new BunSqliteConnection(db);
-    const absurd = new Absurd({ db: conn });
+    const absurd = new Absurd(conn);
 
     await absurd.createQueue("alpha");
     await absurd.createQueue("beta");
@@ -52,7 +52,7 @@ describe("Absurd", () => {
   it("closes workers without affecting the sqlite database", async () => {
     const db = createDatabaseWithMigrations();
     const conn = new BunSqliteConnection(db);
-    const absurd = new Absurd({ db: conn });
+    const absurd = new Absurd(conn);
 
     await absurd.close();
 

@@ -1,112 +1,138 @@
 import { Database } from "bun:sqlite";
 
-import type { Queryable } from "@absurd-sqlite/sdk";
 import type {
-  SQLiteBindParams,
   SQLiteBindValue,
-  SQLiteRestBindParams,
+  SQLiteColumnDefinition,
+  SQLiteConnectionOptions,
+  SQLiteDatabase,
+  SQLiteStatement,
+  SQLiteValueCodec,
 } from "@absurd-sqlite/sdk";
+import { SQLiteConnection } from "@absurd-sqlite/sdk";
 
-export class BunSqliteConnection implements Queryable {
-  private readonly db: Database;
-  private readonly maxRetries = 5;
-  private readonly baseRetryDelayMs = 50;
-
-  constructor(db: Database) {
-    this.db = db;
-  }
-
-  async query<R extends object = Record<string, any>>(
-    sql: string,
-    params?: SQLiteRestBindParams
-  ): Promise<{ rows: R[] }> {
-    const { sql: sqliteQuery, paramOrder } = rewritePostgresQuery(sql);
-    const sqliteParams = rewritePostgresParams(
-      normalizeParams(params),
-      paramOrder
-    );
-
-    const statement = this.db.query(sqliteQuery);
-    const rows = await this.runWithRetry(() =>
-      statement.all(...sqliteParams).map((row) =>
-        decodeRowValues(row as Record<string, unknown>)
-      )
-    );
-
-    return { rows: rows as R[] };
-  }
-
-  async exec(sql: string, params?: SQLiteRestBindParams): Promise<void> {
-    const { sql: sqliteQuery, paramOrder } = rewritePostgresQuery(sql);
-    const sqliteParams = rewritePostgresParams(
-      normalizeParams(params),
-      paramOrder
-    );
-
-    const statement = this.db.query(sqliteQuery);
-    await this.runWithRetry(() => statement.run(...sqliteParams));
-  }
-
-  private async runWithRetry<T>(operation: () => T): Promise<T> {
-    let attempt = 0;
-    while (true) {
-      try {
-        return operation();
-      } catch (err) {
-        if (!isRetryableSQLiteError(err) || attempt >= this.maxRetries) {
-          throw err;
-        }
-        attempt++;
-        await delay(this.baseRetryDelayMs * attempt);
-      }
-    }
+export class BunSqliteConnection extends SQLiteConnection {
+  constructor(db: Database, options: SQLiteConnectionOptions = {}) {
+    const valueCodec = buildValueCodec(options.valueCodec);
+    super(new BunSqliteDatabase(db), { ...options, valueCodec });
   }
 }
 
-function rewritePostgresQuery(text: string): {
-  sql: string;
-  paramOrder: number[];
-} {
-  const paramOrder: number[] = [];
-  const sql = text
-    .replace(/\$(\d+)/g, (_, index) => {
-      paramOrder.push(Number(index));
-      return "?";
-    })
-    .replace(/absurd\.(\w+)/g, "absurd_$1");
+class BunSqliteDatabase implements SQLiteDatabase {
+  constructor(private readonly db: Database) {}
 
-  return { sql, paramOrder };
-}
-
-function rewritePostgresParams<I = any>(
-  params: SQLiteBindValue[],
-  paramOrder: number[]
-): I[] {
-  if (paramOrder.length === 0) {
-    return params.map((value) => encodeColumnValue(value)) as I[];
+  prepare<Result extends object = Record<string, any>>(
+    sql: string
+  ): SQLiteStatement<Result> {
+    const statement = this.db.prepare(sql);
+    return new BunSqliteStatement(statement, isReadonlyQuery(sql));
   }
 
-  return paramOrder.map((index) => {
-    const value = params[index - 1];
-    return encodeColumnValue(value) as I;
-  });
+  close(): void {
+    this.db.close();
+  }
+
+  loadExtension(path: string): void {
+    (this.db as unknown as { loadExtension(path: string): void }).loadExtension(
+      path
+    );
+  }
 }
 
-function decodeRowValues<R extends object = any>(
-  row: Record<string, unknown>
-): R {
+class BunSqliteStatement<Result extends object = Record<string, any>>
+  implements SQLiteStatement<Result>
+{
+  readonly readonly: boolean;
+
+  constructor(
+    private readonly stmt: ReturnType<Database["prepare"]>,
+    readonlyFlag: boolean
+  ) {
+    this.readonly = readonlyFlag;
+  }
+
+  columns(): SQLiteColumnDefinition[] {
+    const columnNames = this.stmt.columnNames ?? [];
+    const declaredTypes = this.stmt.declaredTypes ?? [];
+    return columnNames.map((name, index) => ({
+      name,
+      column: null,
+      table: null,
+      database: null,
+      type: normalizeColumnType(declaredTypes[index] ?? null),
+    }));
+  }
+
+  all(...args: any[]): Result[] {
+    const normalizedArgs = normalizeStatementArgs(args);
+    return this.stmt.all(...normalizedArgs) as Result[];
+  }
+
+  run(...args: any[]): unknown {
+    const normalizedArgs = normalizeStatementArgs(args);
+    return this.stmt.run(...normalizedArgs);
+  }
+}
+
+function buildValueCodec(
+  overrides?: SQLiteValueCodec
+): SQLiteValueCodec {
+  return {
+    encodeParam: overrides?.encodeParam ?? encodeColumnValue,
+    decodeColumn: overrides?.decodeColumn ?? decodeColumnValue,
+    decodeRow: overrides?.decodeRow ?? decodeRowValues,
+  };
+}
+
+function normalizeStatementArgs(args: any[]): any[] {
+  if (args.length !== 1) {
+    return args;
+  }
+  const params = args[0];
+  if (!params || typeof params !== "object" || Array.isArray(params)) {
+    return args;
+  }
+  const normalized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params)) {
+    normalized[normalizeParamKey(key)] = value;
+  }
+  return [normalized];
+}
+
+function normalizeParamKey(key: string): string {
+  if (key.startsWith("$") || key.startsWith(":") || key.startsWith("@")) {
+    return key;
+  }
+  return `:${key}`;
+}
+
+function decodeRowValues<R extends object = any>(args: {
+  row: Record<string, unknown>;
+  columns?: SQLiteColumnDefinition[];
+  decodeColumn?: (args: {
+    value: unknown;
+    columnName: string;
+    columnType: string | null;
+  }) => unknown;
+}): R {
   const decodedRow: any = {};
-  for (const [columnName, rawValue] of Object.entries(row)) {
-    decodedRow[columnName] = decodeColumnValue(rawValue, columnName);
+  for (const [columnName, rawValue] of Object.entries(args.row)) {
+    decodedRow[columnName] = decodeColumnValue({
+      value: rawValue,
+      columnName,
+      columnType: null,
+    });
   }
 
   return decodedRow as R;
 }
 
-function decodeColumnValue<V = any>(
-  value: unknown | V,
-  columnName: string
-): V | null {
+function decodeColumnValue<V = any>(args: {
+  value: unknown | V;
+  columnName: string;
+  columnType: string | null;
+  verbose?: (...args: any[]) => void;
+}): V | null {
+  const { value, columnName } = args;
   if (value === null || value === undefined) {
     return null;
   }
@@ -128,8 +154,7 @@ function decodeColumnValue<V = any>(
   }
 
   if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
-    const bytes =
-      value instanceof Uint8Array ? value : new Uint8Array(value);
+    const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
     const decoded = new TextDecoder().decode(bytes);
     return tryDecodeJson(decoded) ?? (value as V);
   }
@@ -145,7 +170,7 @@ function tryDecodeJson<V = any>(value: string): V | null {
   }
 }
 
-function encodeColumnValue(value: any): any {
+function encodeColumnValue(value: SQLiteBindValue): SQLiteBindValue {
   if (value instanceof Date) {
     return value.toISOString();
   }
@@ -159,60 +184,23 @@ function isTimestampColumn(columnName: string): boolean {
   return columnName.endsWith("_at");
 }
 
-function normalizeParams(
-  params?: SQLiteRestBindParams
-): SQLiteBindValue[] {
-  if (!params) {
-    return [];
-  }
-
-  if (params.length === 1 && isBindParams(params[0])) {
-    const inner = params[0];
-    if (Array.isArray(inner)) {
-      return inner;
-    }
-    return Object.values(inner);
-  }
-
-  return params as SQLiteBindValue[];
+function isReadonlyQuery(sql: string): boolean {
+  const trimmed = sql.trim().toLowerCase();
+  return (
+    trimmed.startsWith("select") ||
+    trimmed.startsWith("with") ||
+    trimmed.startsWith("pragma") ||
+    trimmed.startsWith("explain")
+  );
 }
 
-function isBindParams(value: unknown): value is SQLiteBindParams {
-  if (Array.isArray(value)) {
-    return true;
+function normalizeColumnType(value: string | null): string | null {
+  if (!value) {
+    return null;
   }
-  if (!value || typeof value !== "object") {
-    return false;
+  const lowered = value.toLowerCase();
+  if (lowered === "null") {
+    return null;
   }
-  const tag = Object.prototype.toString.call(value);
-  return tag === "[object Object]";
-}
-
-const sqliteRetryableErrorCodes = new Set(["SQLITE_BUSY", "SQLITE_LOCKED"]);
-const sqliteRetryableErrnos = new Set([5, 6]);
-
-function isRetryableSQLiteError(err: unknown): boolean {
-  if (!err || typeof err !== "object") {
-    return false;
-  }
-
-  const code = (err as any).code;
-  if (typeof code === "string") {
-    for (const retryableCode of sqliteRetryableErrorCodes) {
-      if (code.startsWith(retryableCode)) {
-        return true;
-      }
-    }
-  }
-
-  const errno = (err as any).errno;
-  if (typeof errno === "number" && sqliteRetryableErrnos.has(errno)) {
-    return true;
-  }
-
-  return false;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return lowered;
 }

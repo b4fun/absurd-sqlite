@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterEach, jest } from "bun:test";
 import { EventEmitter, once } from "events";
 import type { TestContext } from "./setup";
 import { createTestAbsurd, randomName } from "./setup";
-import type { Absurd } from "absurd-sdk";
+import type { Absurd } from "@absurd-sqlite/sdk";
 import { waitFor } from "./wait-for";
 
 describe("Worker", () => {
