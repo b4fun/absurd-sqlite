@@ -1,0 +1,1031 @@
+/*
+ * This file is derived from the Absurd TypeScript SDK:
+ * https://github.com/earendil-works/absurd/tree/main/sdks/typescript
+ *
+ * Original work Copyright (c) earendil-works.
+ * Licensed under the Apache License, Version 2.0.
+ *
+ * Modifications Copyright (c) absurd-sqlite contributors.
+ */
+import * as os from "node:os";
+
+/**
+ * Minimal query interface compatible with Absurd's database operations.
+ */
+export interface Queryable {
+  query<R extends object = Record<string, any>>(
+    sql: string,
+    params?: unknown[] | Record<string, unknown>
+  ): Promise<{ rows: R[] }>;
+}
+
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export type JsonObject = {
+  [key: string]: JsonValue;
+};
+
+export interface RetryStrategy {
+  kind: "fixed" | "exponential" | "none";
+  baseSeconds?: number;
+  factor?: number;
+  maxSeconds?: number;
+}
+
+export interface CancellationPolicy {
+  maxDuration?: number;
+  maxDelay?: number;
+}
+
+export interface SpawnOptions {
+  maxAttempts?: number;
+  retryStrategy?: RetryStrategy;
+  headers?: JsonObject;
+  queue?: string;
+  cancellation?: CancellationPolicy;
+  idempotencyKey?: string;
+}
+
+export interface ClaimedTask {
+  run_id: string;
+  task_id: string;
+  task_name: string;
+  attempt: number;
+  params: JsonValue;
+  retry_strategy: JsonValue;
+  max_attempts: number | null;
+  headers: JsonObject | null;
+  wake_event: string | null;
+  event_payload: JsonValue | null;
+}
+
+export interface WorkerOptions {
+  workerId?: string;
+  claimTimeout?: number;
+  batchSize?: number;
+  concurrency?: number;
+  pollInterval?: number;
+  onError?: (error: Error) => void;
+  fatalOnLeaseTimeout?: boolean;
+}
+
+export interface Worker {
+  close(): Promise<void>;
+}
+
+export interface SpawnResult {
+  taskID: string;
+  runID: string;
+  attempt: number;
+  created: boolean;
+}
+
+export type TaskHandler<P = any, R = any> = (
+  params: P,
+  ctx: TaskContext
+) => Promise<R>;
+
+/**
+ * Internal exception that is thrown to suspend a run.
+ */
+export class SuspendTask extends Error {
+  constructor() {
+    super("Task suspended");
+    this.name = "SuspendTask";
+  }
+}
+
+/**
+ * Internal exception that is thrown to cancel a run.
+ */
+export class CancelledTask extends Error {
+  constructor() {
+    super("Task cancelled");
+    this.name = "CancelledTask";
+  }
+}
+
+/**
+ * This error is thrown when awaiting an event ran into a timeout.
+ */
+export class TimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TimeoutError";
+  }
+}
+
+export interface TaskRegistrationOptions {
+  name: string;
+  queue?: string;
+  defaultMaxAttempts?: number;
+  defaultCancellation?: CancellationPolicy;
+}
+
+interface Log {
+  log(...args: any[]): void;
+  info(...args: any[]): void;
+  warn(...args: any[]): void;
+  error(...args: any[]): void;
+}
+
+/**
+ * Hooks for customizing Absurd behavior.
+ */
+export interface AbsurdHooks {
+  /**
+   * Called before spawning a task. Can modify spawn options (including headers).
+   * Use this to inject trace IDs or correlation IDs into headers.
+   */
+  beforeSpawn?: (
+    taskName: string,
+    params: JsonValue,
+    options: SpawnOptions
+  ) => SpawnOptions | Promise<SpawnOptions>;
+  /**
+   * Wraps task execution. Must call and return the result of execute().
+   * Use this to restore context before the task handler runs.
+   */
+  wrapTaskExecution?: <T>(
+    ctx: TaskContext,
+    execute: () => Promise<T>
+  ) => Promise<T>;
+}
+
+/**
+ * Configuration for the Absurd client.
+ */
+export interface AbsurdOptions {
+  db: Queryable;
+  queueName?: string;
+  defaultMaxAttempts?: number;
+  log?: Log;
+  hooks?: AbsurdHooks;
+  ownedConnection?: boolean;
+}
+
+class LeaseTimerManager {
+  private warnTimer: NodeJS.Timeout | null = null;
+  private fatalTimer: NodeJS.Timeout | null = null;
+
+  constructor(
+    private readonly log: Log,
+    private readonly taskLabel: string,
+    private readonly fatalOnLeaseTimeout: boolean
+  ) {}
+
+  update(leaseSeconds: number): void {
+    this.clear();
+    if (leaseSeconds <= 0) {
+      return;
+    }
+    this.warnTimer = setTimeout(() => {
+      this.log.warn(
+        `task ${this.taskLabel} exceeded claim timeout of ${leaseSeconds}s`
+      );
+    }, leaseSeconds * 1000);
+    if (this.fatalOnLeaseTimeout) {
+      this.fatalTimer = setTimeout(() => {
+        this.log.error(
+          `task ${this.taskLabel} exceeded claim timeout of ${leaseSeconds}s by more than 100%; terminating process`
+        );
+        process.exit(1);
+      }, leaseSeconds * 1000 * 2);
+    }
+  }
+
+  stop(): void {
+    this.clear();
+  }
+
+  private clear(): void {
+    if (this.warnTimer) {
+      clearTimeout(this.warnTimer);
+      this.warnTimer = null;
+    }
+    if (this.fatalTimer) {
+      clearTimeout(this.fatalTimer);
+      this.fatalTimer = null;
+    }
+  }
+}
+
+/**
+ * Execution context passed to task handlers.
+ */
+export class TaskContext {
+  private readonly log: Log;
+  readonly taskID: string;
+  private readonly con: Queryable;
+  private readonly queueName: string;
+  private readonly task: ClaimedTask;
+  private readonly checkpointCache: Map<string, JsonValue>;
+  private readonly claimTimeout: number;
+  private readonly leaseTimer: LeaseTimerManager;
+  private stepNameCounter = new Map<string, number>();
+
+  private constructor(
+    log: Log,
+    taskID: string,
+    con: Queryable,
+    queueName: string,
+    task: ClaimedTask,
+    checkpointCache: Map<string, JsonValue>,
+    claimTimeout: number,
+    leaseTimer: LeaseTimerManager
+  ) {
+    this.log = log;
+    this.taskID = taskID;
+    this.con = con;
+    this.queueName = queueName;
+    this.task = task;
+    this.checkpointCache = checkpointCache;
+    this.claimTimeout = claimTimeout;
+    this.leaseTimer = leaseTimer;
+  }
+
+  /**
+   * Returns all headers attached to this task.
+   */
+  get headers(): Readonly<JsonObject> {
+    return this.task.headers ?? {};
+  }
+
+  static async create(args: {
+    log: Log;
+    taskID: string;
+    con: Queryable;
+    queueName: string;
+    task: ClaimedTask;
+    claimTimeout: number;
+    leaseTimer: LeaseTimerManager;
+  }): Promise<TaskContext> {
+    const { log, taskID, con, queueName, task, claimTimeout, leaseTimer } =
+      args;
+    const result = await con.query<{
+      checkpoint_name: string;
+      state: JsonValue;
+      status: string;
+      owner_run_id: string;
+      updated_at: string;
+    }>(
+      `SELECT checkpoint_name, state, status, owner_run_id, updated_at
+       FROM absurd.get_task_checkpoint_states($1, $2, $3)`,
+      [queueName, task.task_id, task.run_id]
+    );
+    const cache = new Map<string, JsonValue>();
+    for (const row of result.rows) {
+      cache.set(row.checkpoint_name, row.state);
+    }
+    return new TaskContext(
+      log,
+      taskID,
+      con,
+      queueName,
+      task,
+      cache,
+      claimTimeout,
+      leaseTimer
+    );
+  }
+
+  /**
+   * Runs an idempotent step identified by name; caches and reuses its result across retries.
+   * @param name Unique checkpoint name for this step.
+   * @param fn Async function computing the step result (must be JSON-serializable).
+   */
+  async step<T extends JsonValue>(
+    name: string,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    const checkpointName = this.getCheckpointName(name);
+    const state = await this.lookupCheckpoint(checkpointName);
+    if (state !== undefined) {
+      return state as T;
+    }
+    const rv = await fn();
+    await this.persistCheckpoint(checkpointName, rv);
+    return rv;
+  }
+
+  /**
+   * Suspends the task until the given duration (seconds) elapses.
+   * @param stepName Checkpoint name for this wait.
+   * @param duration Duration to wait in seconds.
+   */
+  async sleepFor(stepName: string, duration: number): Promise<void> {
+    return await this.sleepUntil(stepName, new Date(Date.now() + duration * 1000));
+  }
+
+  /**
+   * Suspends the task until the specified time.
+   * @param stepName Checkpoint name for this wait.
+   * @param wakeAt Absolute time when the task should resume.
+   */
+  async sleepUntil(stepName: string, wakeAt: Date): Promise<void> {
+    const checkpointName = this.getCheckpointName(stepName);
+    const state = await this.lookupCheckpoint(checkpointName);
+    const actualWakeAt = typeof state === "string" ? new Date(state) : wakeAt;
+    if (!state) {
+      await this.persistCheckpoint(checkpointName, wakeAt.toISOString());
+    }
+    if (Date.now() < actualWakeAt.getTime()) {
+      await this.scheduleRun(actualWakeAt);
+      throw new SuspendTask();
+    }
+  }
+
+  private getCheckpointName(name: string): string {
+    const count = (this.stepNameCounter.get(name) ?? 0) + 1;
+    this.stepNameCounter.set(name, count);
+    return count === 1 ? name : `${name}#${count}`;
+  }
+
+  private async lookupCheckpoint(
+    checkpointName: string
+  ): Promise<JsonValue | undefined> {
+    const cached = this.checkpointCache.get(checkpointName);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const result = await this.con.query<{
+      checkpoint_name: string;
+      state: JsonValue;
+      status: string;
+      owner_run_id: string;
+      updated_at: string;
+    }>(
+      `SELECT checkpoint_name, state, status, owner_run_id, updated_at
+       FROM absurd.get_task_checkpoint_state($1, $2, $3)`,
+      [this.queueName, this.task.task_id, checkpointName]
+    );
+    if (result.rows.length > 0) {
+      const state = result.rows[0].state;
+      this.checkpointCache.set(checkpointName, state);
+      return state;
+    }
+    return undefined;
+  }
+
+  private async persistCheckpoint(
+    checkpointName: string,
+    value: JsonValue
+  ): Promise<void> {
+    await this.con.query(`SELECT absurd.set_task_checkpoint_state($1, $2, $3, $4, $5, $6)`, [
+      this.queueName,
+      this.task.task_id,
+      checkpointName,
+      JSON.stringify(value),
+      this.task.run_id,
+      this.claimTimeout,
+    ]);
+    this.checkpointCache.set(checkpointName, value);
+    this.recordLeaseExtension(this.claimTimeout);
+  }
+
+  private async scheduleRun(wakeAt: Date): Promise<void> {
+    await this.con.query(`SELECT absurd.schedule_run($1, $2, $3)`, [
+      this.queueName,
+      this.task.run_id,
+      wakeAt,
+    ]);
+  }
+
+  /**
+   * Waits for an event by name and returns its payload; optionally sets a custom step name and timeout (seconds).
+   * @param eventName Event identifier to wait for.
+   * @param options.stepName Optional checkpoint name (defaults to $awaitEvent:<eventName>).
+   * @param options.timeout Optional timeout in seconds.
+   * @throws TimeoutError If the event is not received before the timeout.
+   */
+  async awaitEvent(
+    eventName: string,
+    options?: { stepName?: string; timeout?: number }
+  ): Promise<JsonValue> {
+    const stepName = options?.stepName || `$awaitEvent:${eventName}`;
+    let timeout: number | null = null;
+    if (
+      options?.timeout !== undefined &&
+      Number.isFinite(options?.timeout) &&
+      options?.timeout >= 0
+    ) {
+      timeout = Math.floor(options?.timeout);
+    }
+    const checkpointName = this.getCheckpointName(stepName);
+    const cached = await this.lookupCheckpoint(checkpointName);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (
+      this.task.wake_event === eventName &&
+      (this.task.event_payload === null ||
+        this.task.event_payload === undefined)
+    ) {
+      this.task.wake_event = null;
+      this.task.event_payload = null;
+      throw new TimeoutError(`Timed out waiting for event "${eventName}"`);
+    }
+    const result = await this.con.query<{ should_suspend: number; payload: JsonValue }>(
+      `SELECT should_suspend, payload
+        FROM absurd.await_event($1, $2, $3, $4, $5, $6)`,
+      [
+        this.queueName,
+        this.task.task_id,
+        this.task.run_id,
+        checkpointName,
+        eventName,
+        timeout,
+      ]
+    );
+    if (result.rows.length === 0) {
+      throw new Error("Failed to await event");
+    }
+    const { should_suspend, payload } = result.rows[0];
+    if (!should_suspend) {
+      this.checkpointCache.set(checkpointName, payload);
+      this.task.event_payload = null;
+      return payload;
+    }
+    throw new SuspendTask();
+  }
+
+  /**
+   * Extends the current run's lease by the given seconds (defaults to the original claim timeout).
+   * @param seconds Lease extension in seconds.
+   */
+  async heartbeat(seconds?: number): Promise<void> {
+    const leaseSeconds = seconds ?? this.claimTimeout;
+    await this.con.query(`SELECT absurd.extend_claim($1, $2, $3)`, [
+      this.queueName,
+      this.task.run_id,
+      leaseSeconds,
+    ]);
+    this.recordLeaseExtension(leaseSeconds);
+  }
+
+  private recordLeaseExtension(leaseSeconds: number): void {
+    this.leaseTimer.update(leaseSeconds);
+  }
+
+  /**
+   * Emits an event to this task's queue with an optional payload.
+   * @param eventName Non-empty event name.
+   * @param payload Optional JSON-serializable payload.
+   */
+  async emitEvent(eventName: string, payload?: JsonValue): Promise<void> {
+    if (!eventName) {
+      throw new Error("eventName must be a non-empty string");
+    }
+    await this.con.query(`SELECT absurd.emit_event($1, $2, $3)`, [
+      this.queueName,
+      eventName,
+      JSON.stringify(payload ?? null),
+    ]);
+  }
+}
+
+/**
+ * The Absurd SDK client.
+ */
+export class AbsurdImpl {
+  private readonly con: Queryable;
+  private readonly ownedConnection: boolean;
+  private readonly queueName: string;
+  private readonly defaultMaxAttempts: number;
+  private registry = new Map<string, RegisteredTask>();
+  private readonly log: Log;
+  private worker: Worker | null = null;
+  private readonly hooks: AbsurdHooks;
+
+  constructor(options: AbsurdOptions | Queryable) {
+    if (isQueryable(options)) {
+      options = { db: options };
+    }
+    if (!options.db) {
+      throw new Error("Absurd requires a database connection");
+    }
+    this.con = options.db;
+    this.ownedConnection = options.ownedConnection ?? false;
+    this.queueName = options.queueName ?? "default";
+    this.defaultMaxAttempts = options.defaultMaxAttempts ?? 5;
+    this.log = options.log ?? console;
+    this.hooks = options.hooks ?? {};
+  }
+
+  /**
+   * Returns a new client that uses the provided connection for queries; set owned=true to close it with close().
+   * @param con Connection to bind to.
+   * @param owned If true, the bound client will close this connection on close().
+   */
+  bindToConnection(con: Queryable, owned = false): AbsurdImpl {
+    const bound = new AbsurdImpl({
+      db: con,
+      queueName: this.queueName,
+      defaultMaxAttempts: this.defaultMaxAttempts,
+      log: this.log,
+      hooks: this.hooks,
+      ownedConnection: owned,
+    });
+    bound.registry = this.registry;
+    return bound;
+  }
+
+  /**
+   * Registers a task handler by name (optionally specifying queue, defaultMaxAttempts, and defaultCancellation).
+   * @param options.name Task name.
+   * @param options.queue Optional queue name (defaults to client queue).
+   * @param options.defaultMaxAttempts Optional default max attempts.
+   * @param options.defaultCancellation Optional default cancellation policy.
+   * @param handler Async task handler.
+   */
+  registerTask<P = any, R = any>(
+    options: TaskRegistrationOptions,
+    handler: TaskHandler<P, R>
+  ): void {
+    if (!options?.name) {
+      throw new Error("Task registration requires a name");
+    }
+    if (
+      options.defaultMaxAttempts !== undefined &&
+      options.defaultMaxAttempts < 1
+    ) {
+      throw new Error("defaultMaxAttempts must be at least 1");
+    }
+    if (options.defaultCancellation) {
+      normalizeCancellation(options.defaultCancellation);
+    }
+    const queue = options.queue ?? this.queueName;
+    if (!queue) {
+      throw new Error(
+        `Task "${options.name}" must specify a queue or use a client with a default queue`
+      );
+    }
+    this.registry.set(options.name, {
+      name: options.name,
+      queue,
+      defaultMaxAttempts: options.defaultMaxAttempts,
+      defaultCancellation: options.defaultCancellation,
+      handler,
+    });
+  }
+
+  /**
+   * Creates a queue (defaults to this client's queue).
+   * @param queueName Queue name to create.
+   */
+  async createQueue(queueName?: string): Promise<void> {
+    const queue = queueName ?? this.queueName;
+    await this.con.query(`SELECT absurd.create_queue($1)`, [queue]);
+  }
+
+  /**
+   * Drops a queue (defaults to this client's queue).
+   * @param queueName Queue name to drop.
+   */
+  async dropQueue(queueName?: string): Promise<void> {
+    const queue = queueName ?? this.queueName;
+    await this.con.query(`SELECT absurd.drop_queue($1)`, [queue]);
+  }
+
+  /**
+   * Lists all queue names.
+   * @returns Array of queue names.
+   */
+  async listQueues(): Promise<Array<string>> {
+    const result = await this.con.query<{ queue_name: string }>(
+      `SELECT * FROM absurd.list_queues()`
+    );
+    return result.rows.map((row) => row.queue_name);
+  }
+
+  /**
+   * Spawns a task execution by enqueueing it for processing. The task will be picked up by a worker
+   * and executed with the provided parameters. Returns identifiers that can be used to track or cancel the task.
+   *
+   * For registered tasks, the queue and defaults are inferred from registration. For unregistered tasks,
+   * you must provide options.queue.
+   *
+   * @param taskName Name of the task to spawn (must be registered or provide options.queue).
+   * @param params JSON-serializable parameters passed to the task handler.
+   * @param options Configure queue, maxAttempts, retryStrategy, headers, and cancellation policies.
+   * @returns Object containing taskID (unique task identifier), runID (current attempt identifier), and attempt number.
+   * @throws Error If the task is unregistered without a queue, or if the queue mismatches registration.
+   */
+  async spawn<P = any>(
+    taskName: string,
+    params: P,
+    options: SpawnOptions = {}
+  ): Promise<SpawnResult> {
+    const registration = this.registry.get(taskName);
+    let queue: string;
+    if (registration) {
+      queue = registration.queue;
+      if (options.queue !== undefined && options.queue !== registration.queue) {
+        throw new Error(
+          `Task "${taskName}" is registered for queue "${registration.queue}" but spawn requested queue "${options.queue}".`
+        );
+      }
+    } else if (!options.queue) {
+      throw new Error(
+        `Task "${taskName}" is not registered. Provide options.queue when spawning unregistered tasks.`
+      );
+    } else {
+      queue = options.queue;
+    }
+    const effectiveMaxAttempts =
+      options.maxAttempts !== undefined
+        ? options.maxAttempts
+        : registration?.defaultMaxAttempts ?? this.defaultMaxAttempts;
+    const effectiveCancellation =
+      options.cancellation !== undefined
+        ? options.cancellation
+        : registration?.defaultCancellation;
+    let effectiveOptions: SpawnOptions = {
+      ...options,
+      maxAttempts: effectiveMaxAttempts,
+      cancellation: effectiveCancellation,
+    };
+    if (this.hooks.beforeSpawn) {
+      effectiveOptions = await this.hooks.beforeSpawn(
+        taskName,
+        params as JsonValue,
+        effectiveOptions
+      );
+    }
+    const normalizedOptions = normalizeSpawnOptions(effectiveOptions);
+    const result = await this.con.query<{
+      task_id: string;
+      run_id: string;
+      attempt: number;
+      created: boolean;
+    }>(
+      `SELECT task_id, run_id, attempt, created
+       FROM absurd.spawn_task($1, $2, $3, $4)`,
+      [
+        queue,
+        taskName,
+        JSON.stringify(params),
+        JSON.stringify(normalizedOptions),
+      ]
+    );
+    if (result.rows.length === 0) {
+      throw new Error("Failed to spawn task");
+    }
+    const row = result.rows[0];
+    return {
+      taskID: row.task_id,
+      runID: row.run_id,
+      attempt: row.attempt,
+      created: row.created,
+    };
+  }
+
+  /**
+   * Emits an event with an optional payload on the specified or default queue.
+   * @param eventName Non-empty event name.
+   * @param payload Optional JSON-serializable payload.
+   * @param queueName Queue to emit to (defaults to this client's queue).
+   */
+  async emitEvent(
+    eventName: string,
+    payload?: JsonValue,
+    queueName?: string
+  ): Promise<void> {
+    if (!eventName) {
+      throw new Error("eventName must be a non-empty string");
+    }
+    await this.con.query(`SELECT absurd.emit_event($1, $2, $3)`, [
+      queueName || this.queueName,
+      eventName,
+      JSON.stringify(payload ?? null),
+    ]);
+  }
+
+  /**
+   * Cancels a task by ID on the specified or default queue; running tasks stop at the next checkpoint/heartbeat.
+   * @param taskID Task identifier to cancel.
+   * @param queueName Queue name (defaults to this client's queue).
+   */
+  async cancelTask(taskID: string, queueName?: string): Promise<void> {
+    await this.con.query(`SELECT absurd.cancel_task($1, $2)`, [
+      queueName || this.queueName,
+      taskID,
+    ]);
+  }
+
+  async claimTasks(options?: {
+    batchSize?: number;
+    claimTimeout?: number;
+    workerId?: string;
+  }): Promise<ClaimedTask[]> {
+    const {
+      batchSize: count = 1,
+      claimTimeout = 120,
+      workerId = "worker",
+    } = options ?? {};
+    const result = await this.con.query<ClaimedTask>(
+      `SELECT run_id, task_id, attempt, task_name, params, retry_strategy, max_attempts,
+              headers, wake_event, event_payload
+       FROM absurd.claim_task($1, $2, $3, $4)`,
+      [this.queueName, workerId, claimTimeout, count]
+    );
+    return result.rows;
+  }
+
+  /**
+   * Claims up to batchSize tasks and processes them sequentially using the given workerId and claimTimeout.
+   * @param workerId Worker identifier.
+   * @param claimTimeout Lease duration in seconds.
+   * @param batchSize Maximum number of tasks to process.
+   * Note: For parallel processing, use startWorker().
+   */
+  async workBatch(
+    workerId = "worker",
+    claimTimeout = 120,
+    batchSize = 1
+  ): Promise<void> {
+    const tasks = await this.claimTasks({ batchSize, claimTimeout, workerId });
+    for (const task of tasks) {
+      await this.executeTask(task, claimTimeout);
+    }
+  }
+
+  /**
+   * Starts a background worker that continuously polls for and processes tasks from the queue.
+   * The worker will claim tasks up to the configured concurrency limit and process them in parallel.
+   *
+   * @param options Configure worker behavior.
+   * @returns Worker instance with close() method for graceful shutdown.
+   */
+  async startWorker(options: WorkerOptions = {}): Promise<Worker> {
+    const {
+      workerId = `${os.hostname?.() || "host"}:${process.pid}`,
+      claimTimeout = 120,
+      concurrency = 1,
+      batchSize,
+      pollInterval = 0.25,
+      onError = (err) => this.log.error("Worker error:", err),
+      fatalOnLeaseTimeout = true,
+    } = options;
+    const effectiveBatchSize = batchSize ?? concurrency;
+    let running = true;
+    let workerLoopPromise: Promise<void>;
+    const executing = new Set<Promise<void>>();
+    let availabilityPromise: Promise<void> | null = null;
+    let availabilityResolve: (() => void) | null = null;
+    let sleepTimer: NodeJS.Timeout | null = null;
+    const notifyAvailability = () => {
+      if (sleepTimer) {
+        clearTimeout(sleepTimer);
+        sleepTimer = null;
+      }
+      if (availabilityResolve) {
+        availabilityResolve();
+        availabilityResolve = null;
+        availabilityPromise = null;
+      }
+    };
+    const waitForAvailability = async () => {
+      if (!availabilityPromise) {
+        availabilityPromise = new Promise((resolve) => {
+          availabilityResolve = resolve;
+          sleepTimer = setTimeout(() => {
+            sleepTimer = null;
+            availabilityResolve = null;
+            availabilityPromise = null;
+            resolve();
+          }, pollInterval * 1000);
+        });
+      }
+      await availabilityPromise;
+    };
+    const worker: Worker = {
+      close: async () => {
+        running = false;
+        await workerLoopPromise;
+      },
+    };
+    this.worker = worker;
+    workerLoopPromise = (async () => {
+      while (running) {
+        try {
+          if (executing.size >= concurrency) {
+            await waitForAvailability();
+            continue;
+          }
+          const availableCapacity = Math.max(concurrency - executing.size, 0);
+          const toClaim = Math.min(effectiveBatchSize, availableCapacity);
+          if (toClaim <= 0) {
+            await waitForAvailability();
+            continue;
+          }
+          const messages = await this.claimTasks({
+            batchSize: toClaim,
+            claimTimeout,
+            workerId,
+          });
+          if (messages.length === 0) {
+            await waitForAvailability();
+            continue;
+          }
+          for (const task of messages) {
+            const promise = this.executeTask(task, claimTimeout, {
+              fatalOnLeaseTimeout,
+            })
+              .catch((err) => onError(err))
+              .finally(() => {
+                executing.delete(promise);
+                notifyAvailability();
+              });
+            executing.add(promise);
+          }
+        } catch (err) {
+          onError(err as Error);
+          await waitForAvailability();
+        }
+      }
+      await Promise.allSettled(executing);
+    })();
+    return worker;
+  }
+
+  /**
+   * Stops any running worker and closes the underlying connection if owned.
+   */
+  async close(): Promise<void> {
+    if (this.worker) {
+      await this.worker.close();
+    }
+    if (this.ownedConnection) {
+      await closeIfSupported(this.con);
+    }
+  }
+
+  async executeTask(
+    task: ClaimedTask,
+    claimTimeout: number,
+    options?: { fatalOnLeaseTimeout?: boolean }
+  ): Promise<void> {
+    const registration = this.registry.get(task.task_name);
+    const taskLabel = `${task.task_name} (${task.task_id})`;
+    const leaseTimer = new LeaseTimerManager(
+      this.log,
+      taskLabel,
+      options?.fatalOnLeaseTimeout ?? false
+    );
+    const ctx = await TaskContext.create({
+      log: this.log,
+      taskID: task.task_id,
+      con: this.con,
+      queueName: registration?.queue ?? "unknown",
+      task,
+      claimTimeout,
+      leaseTimer,
+    });
+    leaseTimer.update(claimTimeout);
+    try {
+      if (!registration) {
+        throw new Error("Unknown task");
+      } else if (registration.queue !== this.queueName) {
+        throw new Error("Misconfigured task (queue mismatch)");
+      }
+      const execute = async () => {
+        const result = await registration.handler(task.params, ctx);
+        await completeTaskRun(this.con, this.queueName, task.run_id, result);
+      };
+      if (this.hooks.wrapTaskExecution) {
+        await this.hooks.wrapTaskExecution(ctx, execute);
+      } else {
+        await execute();
+      }
+    } catch (err) {
+      if (err instanceof SuspendTask || err instanceof CancelledTask) {
+        return;
+      }
+      this.log.error("[absurd] task execution failed:", err);
+      await failTaskRun(this.con, this.queueName, task.run_id, err as Error);
+    } finally {
+      leaseTimer.stop();
+    }
+  }
+}
+
+type RegisteredTask = {
+  name: string;
+  queue: string;
+  defaultMaxAttempts?: number;
+  defaultCancellation?: CancellationPolicy;
+  handler: TaskHandler;
+};
+
+function isQueryable(value: AbsurdOptions | Queryable): value is Queryable {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Queryable).query === "function"
+  );
+}
+
+async function closeIfSupported(con: Queryable): Promise<void> {
+  const maybeClose = (con as { close?: () => void | Promise<void> }).close;
+  if (typeof maybeClose === "function") {
+    await maybeClose.call(con);
+  }
+}
+
+function serializeError(err: unknown): JsonObject {
+  if (err instanceof Error) {
+    return {
+      name: err.name,
+      message: err.message,
+      stack: err.stack ?? null,
+    };
+  }
+  return { message: String(err) };
+}
+
+async function completeTaskRun(
+  con: Queryable,
+  queueName: string,
+  runID: string,
+  result: JsonValue
+): Promise<void> {
+  await con.query(`SELECT absurd.complete_run($1, $2, $3)`, [
+    queueName,
+    runID,
+    JSON.stringify(result ?? null),
+  ]);
+}
+
+async function failTaskRun(
+  con: Queryable,
+  queueName: string,
+  runID: string,
+  err: Error
+): Promise<void> {
+  await con.query(`SELECT absurd.fail_run($1, $2, $3, $4)`, [
+    queueName,
+    runID,
+    JSON.stringify(serializeError(err)),
+    null,
+  ]);
+}
+
+function normalizeSpawnOptions(options: SpawnOptions): JsonObject {
+  const normalized: JsonObject = {};
+  if (options.headers !== undefined) {
+    normalized.headers = options.headers;
+  }
+  if (options.maxAttempts !== undefined) {
+    normalized.max_attempts = options.maxAttempts;
+  }
+  if (options.retryStrategy) {
+    normalized.retry_strategy = serializeRetryStrategy(options.retryStrategy);
+  }
+  const cancellation = normalizeCancellation(options.cancellation);
+  if (cancellation) {
+    normalized.cancellation = cancellation;
+  }
+  if (options.idempotencyKey !== undefined) {
+    normalized.idempotency_key = options.idempotencyKey;
+  }
+  return normalized;
+}
+
+function serializeRetryStrategy(strategy: RetryStrategy): JsonObject {
+  const serialized: JsonObject = {
+    kind: strategy.kind,
+  };
+  if (strategy.baseSeconds !== undefined) {
+    serialized.base_seconds = strategy.baseSeconds;
+  }
+  if (strategy.factor !== undefined) {
+    serialized.factor = strategy.factor;
+  }
+  if (strategy.maxSeconds !== undefined) {
+    serialized.max_seconds = strategy.maxSeconds;
+  }
+  return serialized;
+}
+
+function normalizeCancellation(
+  policy?: CancellationPolicy
+): JsonObject | undefined {
+  if (!policy) {
+    return undefined;
+  }
+  const normalized: JsonObject = {};
+  if (policy.maxDuration !== undefined) {
+    normalized.max_duration = policy.maxDuration;
+  }
+  if (policy.maxDelay !== undefined) {
+    normalized.max_delay = policy.maxDelay;
+  }
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
