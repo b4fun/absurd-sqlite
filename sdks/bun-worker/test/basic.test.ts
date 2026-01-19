@@ -7,7 +7,7 @@ import {
   jest,
 } from "bun:test";
 import assert from "node:assert/strict";
-import type { Absurd } from "@absurd-sqlite/sdk";
+import { Temporal, type Absurd } from "@absurd-sqlite/sdk";
 import { createTestAbsurd, randomName, type TestContext } from "./setup";
 import { EventEmitter, once } from "events";
 import { waitFor } from "./wait-for";
@@ -171,7 +171,7 @@ describe("Basic SDK Operations", () => {
       const scheduledRun = await ctx.getRun(runID);
       expect(scheduledRun).toMatchObject({
         state: "sleeping",
-        available_at: wakeAt,
+        available_at: Temporal.Instant.fromEpochMilliseconds(wakeAt.getTime()),
         wake_event: null,
       });
 
@@ -189,7 +189,7 @@ describe("Basic SDK Operations", () => {
       const resumedRun = await ctx.getRun(runID);
       expect(resumedRun).toMatchObject({
         state: "running",
-        started_at: wakeAt,
+        started_at: Temporal.Instant.fromEpochMilliseconds(wakeAt.getTime()),
       });
     });
 
@@ -216,7 +216,9 @@ describe("Basic SDK Operations", () => {
       expect(running).toMatchObject({
         state: "running",
         claimed_by: "worker-a",
-        claim_expires_at: new Date(baseTime.getTime() + 30 * 1000),
+        claim_expires_at: Temporal.Instant.fromEpochMilliseconds(
+          baseTime.getTime() + 30 * 1000,
+        ),
       });
 
       await ctx.setFakeNow(new Date(baseTime.getTime() + 5 * 60 * 1000));
@@ -275,7 +277,9 @@ describe("Basic SDK Operations", () => {
       const runRow = await ctx.getRun(runID);
       expect(runRow).toMatchObject({
         claimed_by: "worker-clean",
-        claim_expires_at: new Date(base.getTime() + 60 * 1000),
+        claim_expires_at: Temporal.Instant.fromEpochMilliseconds(
+          base.getTime() + 60 * 1000,
+        ),
       });
 
       const beforeTTL = new Date(finishTime.getTime() + 30 * 60 * 1000);
@@ -482,7 +486,9 @@ describe("Basic SDK Operations", () => {
 
       const getExpiresAt = async (runID: string) => {
         const run = await ctx.getRun(runID);
-        return run?.claim_expires_at ? run.claim_expires_at.getTime() : 0;
+        return run?.claim_expires_at
+          ? run.claim_expires_at.epochMilliseconds
+          : 0;
       };
 
       absurd.workBatch("test-worker", claimTimeout);

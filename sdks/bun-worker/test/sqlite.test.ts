@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { BunSqliteConnection } from "../src/sqlite";
+import { Temporal } from "@absurd-sqlite/sdk";
 
 describe("BunSqliteConnection", () => {
   it("rewrites postgres-style params and absurd schema names", async () => {
@@ -75,7 +76,7 @@ describe("BunSqliteConnection", () => {
     db.close();
   });
 
-  it("decodes datetime columns into Date objects", async () => {
+  it("decodes datetime columns into Temporal.Instant objects", async () => {
     const db = new Database(":memory:");
     const conn = new BunSqliteConnection(db);
     const now = Date.now();
@@ -83,12 +84,12 @@ describe("BunSqliteConnection", () => {
     await conn.exec("CREATE TABLE t_date (created_at DATETIME)");
     await conn.exec("INSERT INTO t_date (created_at) VALUES ($1)", [now]);
 
-    const { rows } = await conn.query<{ created_at: Date }>(
+    const { rows } = await conn.query<{ created_at: Temporal.Instant }>(
       "SELECT created_at FROM t_date"
     );
 
-    expect(rows[0]?.created_at).toBeInstanceOf(Date);
-    expect(rows[0]?.created_at.getTime()).toBe(now);
+    expect(rows[0]?.created_at).toBeInstanceOf(Temporal.Instant);
+    expect(rows[0]?.created_at.epochMilliseconds).toBe(now);
     db.close();
   });
 

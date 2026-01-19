@@ -8,7 +8,7 @@ import type {
   SQLiteStatement,
   SQLiteValueCodec,
 } from "@absurd-sqlite/sdk";
-import { SQLiteConnection } from "@absurd-sqlite/sdk";
+import { SQLiteConnection, Temporal } from "@absurd-sqlite/sdk";
 
 export class BunSqliteConnection extends SQLiteConnection {
   constructor(db: Database, options: SQLiteConnectionOptions = {}) {
@@ -115,6 +115,19 @@ function decodeRowValues<R extends object = any>(args: {
   }) => unknown;
 }): R {
   const decodedRow: any = {};
+  if (args.columns && args.decodeColumn) {
+    for (const column of args.columns) {
+      const columnName = column.name;
+      const rawValue = args.row[columnName];
+      decodedRow[columnName] = args.decodeColumn({
+        value: rawValue,
+        columnName,
+        columnType: column.type,
+      });
+    }
+    return decodedRow as R;
+  }
+
   for (const [columnName, rawValue] of Object.entries(args.row)) {
     decodedRow[columnName] = decodeColumnValue({
       value: rawValue,
@@ -132,21 +145,22 @@ function decodeColumnValue<V = any>(args: {
   columnType: string | null;
   verbose?: (...args: any[]) => void;
 }): V | null {
-  const { value, columnName } = args;
+  const { value, columnName, columnType } = args;
   if (value === null || value === undefined) {
     return null;
   }
 
-  if (isTimestampColumn(columnName)) {
-    if (typeof value === "number") {
-      return new Date(value) as V;
-    }
+  const isDateTime = columnType === "datetime" || isTimestampColumn(columnName);
+  if (isDateTime) {
     if (typeof value === "string") {
-      const parsed = Date.parse(value);
-      if (!Number.isNaN(parsed)) {
-        return new Date(parsed) as V;
-      }
+      return Temporal.Instant.from(value) as V;
     }
+    if (typeof value === "number") {
+      return Temporal.Instant.fromEpochMilliseconds(value) as V;
+    }
+    throw new Error(
+      `Expected datetime column ${columnName} to be a string or number, got ${typeof value}`
+    );
   }
 
   if (typeof value === "string") {
@@ -171,6 +185,12 @@ function tryDecodeJson<V = any>(value: string): V | null {
 }
 
 function encodeColumnValue(value: SQLiteBindValue): SQLiteBindValue {
+  if (value instanceof Temporal.Instant) {
+    return value.toString();
+  }
+  if (value instanceof Temporal.Duration) {
+    return value.toString();
+  }
   if (value instanceof Date) {
     return value.toISOString();
   }

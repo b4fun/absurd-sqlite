@@ -39,7 +39,8 @@
   "homepage": "https://github.com/b4fun/absurd-sqlite#readme",
   "dependencies": {
     "@absurd-sqlite/sdk": "next",
-    "cac": "^6.7.14"
+    "cac": "^6.7.14",
+    "temporal-polyfill": "^0.3.0"
   },
   "devDependencies": {
     "bun-types": "^1.3.6",

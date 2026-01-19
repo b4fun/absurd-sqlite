@@ -14,6 +14,7 @@ export type { WorkerOptions } from "@absurd-sqlite/sdk";
 export {
   downloadExtension,
   type DownloadExtensionOptions,
+  Temporal,
 } from "@absurd-sqlite/sdk";
 
 /**

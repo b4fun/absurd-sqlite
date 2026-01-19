@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterEach, jest } from "bun:test";
-import type { Absurd } from "@absurd-sqlite/sdk";
+import { Temporal, type Absurd } from "@absurd-sqlite/sdk";
 import { createTestAbsurd, randomName, type TestContext } from "./setup";
 
 describe("Step functionality", () => {
@@ -193,7 +193,10 @@ describe("Step functionality", () => {
 
     const durationSeconds = 60;
     absurd.registerTask({ name: "sleep-for" }, async (_params, ctx) => {
-      await ctx.sleepFor("wait-for", durationSeconds);
+      await ctx.sleepFor(
+        "wait-for",
+        Temporal.Duration.from({ seconds: durationSeconds }),
+      );
       return { resumed: true };
     });
 
@@ -205,7 +208,9 @@ describe("Step functionality", () => {
       state: "sleeping",
     });
     const wakeTime = new Date(base.getTime() + durationSeconds * 1000);
-    expect(sleepingRun?.available_at?.getTime()).toBe(wakeTime.getTime());
+    expect(sleepingRun?.available_at?.epochMilliseconds).toBe(
+      wakeTime.getTime(),
+    );
 
     const resumeTime = new Date(wakeTime.getTime() + 5 * 1000);
     jest.setSystemTime(resumeTime);
@@ -225,11 +230,14 @@ describe("Step functionality", () => {
     await ctx.setFakeNow(base);
 
     const wakeTime = new Date(base.getTime() + 5 * 60 * 1000);
+    const wakeInstant = Temporal.Instant.fromEpochMilliseconds(
+      wakeTime.getTime(),
+    );
     let executions = 0;
 
     absurd.registerTask({ name: "sleep-until" }, async (_params, ctx) => {
       executions++;
-      await ctx.sleepUntil("sleep-step", wakeTime);
+      await ctx.sleepUntil("sleep-step", wakeInstant);
       return { executions };
     });
 
@@ -240,7 +248,7 @@ describe("Step functionality", () => {
     expect(checkpointRow).toMatchObject({
       checkpoint_name: "sleep-step",
       owner_run_id: runID,
-      state: wakeTime.toISOString(),
+      state: wakeInstant.toString(),
     });
 
     const sleepingRun = await ctx.getRun(runID);
