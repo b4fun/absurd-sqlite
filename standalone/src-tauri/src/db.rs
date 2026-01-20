@@ -140,6 +140,9 @@ fn resolve_extension_path(app_handle: &AppHandle) -> Option<PathBuf> {
         }
     }
 
+    // FIXME: in MacOS bundle, we should reference the library from Frameworks folder
+    // instead of Resources. However, either way require code signing setup, which is not
+    // yet done.
     match app_handle.path().resource_dir() {
         Ok(resource_dir) => {
             let resource_path = resource_dir.join("resources").join(&lib_name);

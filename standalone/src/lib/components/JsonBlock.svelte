@@ -41,7 +41,7 @@
   };
 </script>
 
-<div class="rounded-md border border-black/10">
+<div class="rounded-md border border-black/10 overflow-hidden">
   <div class="flex items-center justify-between border-b border-black/10 bg-slate-50 px-3 py-2 text-xs text-slate-500">
     <span>{title}</span>
     <Button type="button" class="hover:text-slate-700" onclick={handleCopy}>
