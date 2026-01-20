@@ -398,7 +398,7 @@
 
   <article class="rounded-lg border border-black/10 bg-white p-6">
     <h2 class="text-lg font-semibold text-slate-900">Database</h2>
-    <p class="mt-1 text-sm text-slate-500">Primary storage location for task data.</p>
+    <p class="mt-1 text-sm text-slate-500">SQLite database information.</p>
     <dl class="mt-4 space-y-3 text-sm">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <dt class="text-slate-500">Disk size</dt>
