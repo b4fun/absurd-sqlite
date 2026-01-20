@@ -301,8 +301,10 @@
             <td class="px-4 py-3">
               <div class="flex flex-col gap-1">
                 <span class="font-mono text-xs text-slate-700">run: {run.runId}</span>
-                <span
-                  class={`w-fit font-mono text-[10px] ${
+                <button
+                  type="button"
+                  aria-label="Highlight task id"
+                  class={`w-fit cursor-default text-left font-mono text-[10px] ${
                     hoveredTaskId === run.id
                       ? "rounded bg-amber-50 px-1 text-amber-700"
                       : "text-slate-500"
@@ -315,7 +317,7 @@
                   }}
                 >
                   task: {run.id}
-                </span>
+                </button>
               </div>
             </td>
             <td class="px-4 py-3 text-slate-800">{run.name}</td>
