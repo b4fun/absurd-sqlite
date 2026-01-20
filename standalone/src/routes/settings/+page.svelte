@@ -10,6 +10,7 @@
     type WorkerStatus,
   } from "$lib/providers/absurdData";
   import { invoke } from "@tauri-apps/api/core";
+  import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
   const provider = getAbsurdProvider();
   const defaults: SettingsInfo = {
@@ -54,6 +55,7 @@
   const canCopyPath = $derived(
     data.dbPath !== "--" && data.dbPath.trim().length > 0,
   );
+  const canOpenFolder = $derived(canCopyPath && isTauriRuntime());
   let copyStatus = $state<"idle" | "copied" | "error">("idle");
   const showDevApi = $derived(isTauriRuntime());
   const normalizedWorkerPath = $derived(workerPathDraft.trim());
@@ -172,6 +174,27 @@
     setTimeout(() => {
       copyStatus = "idle";
     }, 2000);
+  };
+
+  const resolveFolderPath = (path: string) => {
+    if (!path || path === "--") return "";
+    const normalized = path.replace(/\\/g, "/");
+    const lastSlash = normalized.lastIndexOf("/");
+    if (lastSlash <= 0) return path;
+    const dir = normalized.slice(0, lastSlash);
+    return path.includes("\\") ? dir.replaceAll("/", "\\") : dir;
+  };
+
+  const handleOpenFolder = async () => {
+    if (!canOpenFolder) {
+      return;
+    }
+
+    try {
+      await revealItemInDir(data.dbPath);
+    } catch (error) {
+      console.error("Failed to open database folder", error);
+    }
   };
 
   const syncWorkerStatus = (status: WorkerStatus) => {
@@ -377,31 +400,33 @@
     <h2 class="text-lg font-semibold text-slate-900">Database</h2>
     <p class="mt-1 text-sm text-slate-500">Primary storage location for task data.</p>
     <dl class="mt-4 space-y-3 text-sm">
-      <div class="space-y-2">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <dt class="text-slate-500">File path</dt>
-          <div class="flex items-center gap-2">
-            <span
-              class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600"
-            >
-              {dbSizeLabel}
-            </span>
-            <Button
-              type="button"
-              class="rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!canCopyPath}
-              onclick={handleCopyPath}
-            >
-              {copyStatus === "copied"
-                ? "Copied"
-                : copyStatus === "error"
-                  ? "Copy failed"
-                  : "Copy"}
-            </Button>
-          </div>
-        </div>
-        <dd class="break-all rounded-md border border-black/10 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700">
-          {data.dbPath}
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <dt class="text-slate-500">Disk size</dt>
+        <dd class="font-medium text-slate-700">{dbSizeLabel}</dd>
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <dt class="text-slate-500">Actions</dt>
+        <dd class="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            class="rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!canCopyPath}
+            onclick={handleCopyPath}
+          >
+            {copyStatus === "copied"
+              ? "Copied"
+              : copyStatus === "error"
+                ? "Copy failed"
+                : "Copy full path"}
+          </Button>
+          <Button
+            type="button"
+            class="rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!canOpenFolder}
+            onclick={handleOpenFolder}
+          >
+            Open folder
+          </Button>
         </dd>
       </div>
     </dl>
