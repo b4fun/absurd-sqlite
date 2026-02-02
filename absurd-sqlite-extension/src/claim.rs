@@ -1,5 +1,6 @@
 use crate::retry;
 use crate::sql;
+use crate::types::{RunState, TaskState};
 use crate::validate;
 use serde_json::Value as JsonValue;
 use sqlite3ext_sys::sqlite3;
@@ -241,7 +242,7 @@ fn expire_claims(db: *mut sqlite3, queue_name: &str, now: i64) -> Result<()> {
             Some(max_attempts)
         };
         let allow_retry = max_attempts_opt.is_none_or(|max| next_attempt <= max);
-        let mut task_state = "failed";
+        let mut task_state = TaskState::Failed;
         let mut last_attempt_run = run_id.clone();
         let mut cancelled_at = "";
         let mut recorded_attempt = attempt;
@@ -261,17 +262,18 @@ fn expire_claims(db: *mut sqlite3, queue_name: &str, now: i64) -> Result<()> {
             };
 
             if cancel_task {
-                task_state = "cancelled";
+                task_state = TaskState::Cancelled;
                 cancelled_at = &now_value;
             } else {
                 let new_run_id = Uuid::now_v7().to_string();
                 let next_available_value = next_available.to_string();
                 let next_attempt_value = next_attempt.to_string();
                 let run_state = if next_available > now {
-                    "sleeping"
+                    RunState::Sleeping
                 } else {
-                    "pending"
+                    RunState::Pending
                 };
+                let run_state_str = run_state.to_string();
                 sql::exec_with_bind_text(
                     db,
                     "insert into absurd_runs (
@@ -303,17 +305,22 @@ fn expire_claims(db: *mut sqlite3, queue_name: &str, now: i64) -> Result<()> {
                         &new_run_id,
                         &task_id,
                         &next_attempt_value,
-                        run_state,
+                        &run_state_str,
                         &next_available_value,
                     ],
                 )?;
-                task_state = run_state;
+                task_state = match run_state {
+                    RunState::Sleeping => TaskState::Sleeping,
+                    RunState::Pending => TaskState::Pending,
+                    _ => TaskState::Pending, // Should not happen in this context
+                };
                 last_attempt_run = new_run_id;
                 recorded_attempt = next_attempt;
             }
         }
 
         let attempt_value = recorded_attempt.to_string();
+        let task_state_str = task_state.to_string();
         sql::exec_with_bind_text(
             db,
             "update absurd_tasks
@@ -327,7 +334,7 @@ fn expire_claims(db: *mut sqlite3, queue_name: &str, now: i64) -> Result<()> {
               where queue_name = ?5
                 and task_id = ?6",
             &[
-                task_state,
+                &task_state_str,
                 &attempt_value,
                 &last_attempt_run,
                 cancelled_at,

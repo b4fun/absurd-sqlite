@@ -1,4 +1,5 @@
 use crate::sql;
+use crate::types::{RunState, TaskState};
 use crate::validate;
 use serde_json::Value as JsonValue;
 use sqlite3ext_sys::sqlite3;
@@ -146,8 +147,11 @@ fn await_event_impl(
         let task_state = run_row
             .get::<String>(3)
             .map_err(|err| Error::new_message(format!("failed to read task state: {:?}", err)))?;
+        let task_state = task_state
+            .parse::<TaskState>()
+            .map_err(|err| Error::new_message(format!("invalid task state: {}", err)))?;
 
-        if task_state == "cancelled" {
+        if task_state == TaskState::Cancelled {
             return Err(Error::new_message("Task has been cancelled"));
         }
 
@@ -191,7 +195,11 @@ fn await_event_impl(
             }
         }
 
-        if run_state != "running" {
+        let run_state = run_state
+            .parse::<RunState>()
+            .map_err(|err| Error::new_message(format!("invalid run state: {}", err)))?;
+
+        if run_state != RunState::Running {
             return Err(Error::new_message(
                 "Run must be running to await absurd_events",
             ));

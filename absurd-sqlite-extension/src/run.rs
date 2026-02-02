@@ -1,5 +1,6 @@
 use crate::retry;
 use crate::sql;
+use crate::types::{RunState, TaskState};
 use crate::validate;
 use chrono::DateTime;
 use serde_json::Value as JsonValue;
@@ -179,7 +180,7 @@ fn fail_run_impl(
             Some(max_attempts)
         };
         let allow_retry = max_attempts_opt.is_none_or(|max| next_attempt <= max);
-        let mut task_state = "failed";
+        let mut task_state = TaskState::Failed;
         let mut last_attempt_run = run_id.to_string();
         let mut cancelled_at = "";
         let mut recorded_attempt = attempt;
@@ -202,17 +203,18 @@ fn fail_run_impl(
             };
 
             if cancel_task {
-                task_state = "cancelled";
+                task_state = TaskState::Cancelled;
                 cancelled_at = &now_value;
             } else {
                 let new_run_id = Uuid::now_v7().to_string();
                 let next_available_value = next_available.to_string();
                 let next_attempt_value = next_attempt.to_string();
                 let run_state = if next_available > now {
-                    "sleeping"
+                    RunState::Sleeping
                 } else {
-                    "pending"
+                    RunState::Pending
                 };
+                let run_state_str = run_state.to_string();
                 sql::exec_with_bind_text(
                     db,
                     "insert into absurd_runs (
@@ -244,17 +246,22 @@ fn fail_run_impl(
                         &new_run_id,
                         &task_id,
                         &next_attempt_value,
-                        run_state,
+                        &run_state_str,
                         &next_available_value,
                     ],
                 )?;
-                task_state = run_state;
+                task_state = match run_state {
+                    RunState::Sleeping => TaskState::Sleeping,
+                    RunState::Pending => TaskState::Pending,
+                    _ => TaskState::Pending, // Should not happen in this context
+                };
                 last_attempt_run = new_run_id;
                 recorded_attempt = next_attempt;
             }
         }
 
         let attempt_value = recorded_attempt.to_string();
+        let task_state_str = task_state.to_string();
         sql::exec_with_bind_text(
             db,
             "update absurd_tasks
@@ -268,7 +275,7 @@ fn fail_run_impl(
               where queue_name = ?5
                 and task_id = ?6",
             &[
-                task_state,
+                &task_state_str,
                 &attempt_value,
                 &last_attempt_run,
                 cancelled_at,
@@ -360,8 +367,11 @@ pub fn absurd_complete_run(
         let run_state = row
             .get::<String>(1)
             .map_err(|err| Error::new_message(format!("failed to read state: {:?}", err)))?;
+        let run_state = run_state
+            .parse::<RunState>()
+            .map_err(|err| Error::new_message(format!("invalid run state: {}", err)))?;
 
-        if run_state != "running" {
+        if run_state != RunState::Running {
             return Err(Error::new_message("run is not currently running"));
         }
 
@@ -486,8 +496,11 @@ pub fn absurd_extend_claim(
         let task_state = row
             .get::<String>(0)
             .map_err(|err| Error::new_message(format!("failed to read state: {:?}", err)))?;
+        let task_state = task_state
+            .parse::<TaskState>()
+            .map_err(|err| Error::new_message(format!("invalid task state: {}", err)))?;
 
-        if task_state == "cancelled" {
+        if task_state == TaskState::Cancelled {
             return Err(Error::new_message("Task has been cancelled"));
         }
 
@@ -816,8 +829,14 @@ pub fn absurd_cancel_task(
         let task_state = row
             .get::<String>(0)
             .map_err(|err| Error::new_message(format!("failed to read task state: {:?}", err)))?;
+        let task_state = task_state
+            .parse::<TaskState>()
+            .map_err(|err| Error::new_message(format!("invalid task state: {}", err)))?;
 
-        if task_state == "completed" || task_state == "failed" || task_state == "cancelled" {
+        if task_state == TaskState::Completed
+            || task_state == TaskState::Failed
+            || task_state == TaskState::Cancelled
+        {
             return Ok(());
         }
 
