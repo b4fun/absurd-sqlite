@@ -312,7 +312,14 @@ fn expire_claims(db: *mut sqlite3, queue_name: &str, now: i64) -> Result<()> {
                 task_state = match run_state {
                     RunState::Sleeping => TaskState::Sleeping,
                     RunState::Pending => TaskState::Pending,
-                    _ => TaskState::Pending, // Should not happen in this context
+                    // These states are impossible here since run_state is derived from
+                    // the conditional above which only produces Sleeping or Pending
+                    RunState::Running
+                    | RunState::Completed
+                    | RunState::Failed
+                    | RunState::Cancelled => {
+                        unreachable!("run_state can only be Sleeping or Pending in this context")
+                    }
                 };
                 last_attempt_run = new_run_id;
                 recorded_attempt = next_attempt;
