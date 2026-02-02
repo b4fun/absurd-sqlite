@@ -122,10 +122,19 @@ mod tests {
     fn test_task_state_from_str() {
         assert_eq!("pending".parse::<TaskState>().unwrap(), TaskState::Pending);
         assert_eq!("running".parse::<TaskState>().unwrap(), TaskState::Running);
-        assert_eq!("sleeping".parse::<TaskState>().unwrap(), TaskState::Sleeping);
-        assert_eq!("completed".parse::<TaskState>().unwrap(), TaskState::Completed);
+        assert_eq!(
+            "sleeping".parse::<TaskState>().unwrap(),
+            TaskState::Sleeping
+        );
+        assert_eq!(
+            "completed".parse::<TaskState>().unwrap(),
+            TaskState::Completed
+        );
         assert_eq!("failed".parse::<TaskState>().unwrap(), TaskState::Failed);
-        assert_eq!("cancelled".parse::<TaskState>().unwrap(), TaskState::Cancelled);
+        assert_eq!(
+            "cancelled".parse::<TaskState>().unwrap(),
+            TaskState::Cancelled
+        );
         assert!("invalid".parse::<TaskState>().is_err());
     }
 
@@ -144,9 +153,15 @@ mod tests {
         assert_eq!("pending".parse::<RunState>().unwrap(), RunState::Pending);
         assert_eq!("running".parse::<RunState>().unwrap(), RunState::Running);
         assert_eq!("sleeping".parse::<RunState>().unwrap(), RunState::Sleeping);
-        assert_eq!("completed".parse::<RunState>().unwrap(), RunState::Completed);
+        assert_eq!(
+            "completed".parse::<RunState>().unwrap(),
+            RunState::Completed
+        );
         assert_eq!("failed".parse::<RunState>().unwrap(), RunState::Failed);
-        assert_eq!("cancelled".parse::<RunState>().unwrap(), RunState::Cancelled);
+        assert_eq!(
+            "cancelled".parse::<RunState>().unwrap(),
+            RunState::Cancelled
+        );
         assert!("invalid".parse::<RunState>().is_err());
     }
 
