@@ -1,4 +1,5 @@
 use crate::sql;
+use crate::types::TaskState;
 use crate::validate;
 use serde_json::Value as JsonValue;
 use sqlite3ext_sys::sqlite3;
@@ -93,8 +94,11 @@ pub fn absurd_set_task_checkpoint_state(
         let task_state = row
             .get::<String>(1)
             .map_err(|err| Error::new_message(format!("failed to read task state: {:?}", err)))?;
+        let task_state = task_state
+            .parse::<TaskState>()
+            .map_err(|err| Error::new_message(format!("invalid task state: {}", err)))?;
 
-        if task_state == "cancelled" {
+        if task_state == TaskState::Cancelled {
             return Err(Error::new_message("Task has been cancelled"));
         }
 

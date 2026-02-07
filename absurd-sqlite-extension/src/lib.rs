@@ -15,7 +15,11 @@ mod run;
 mod settings;
 mod spawn;
 mod sql;
+pub mod types;
 mod validate;
+
+// Re-export public types for convenience
+pub use types::{RunState, TaskState};
 
 /// SQL: absurd_version()
 /// Usage: return extension version and git commit.
