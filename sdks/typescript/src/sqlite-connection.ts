@@ -1,12 +1,12 @@
 import { Temporal } from "temporal-polyfill";
-import type { Queryable } from "./absurd";
+import type { Queryable } from "./absurd.js";
 import type {
   SQLiteColumnDefinition,
   SQLiteDatabase,
   SQLiteStatement,
   SQLiteVerboseLog,
   SQLiteBindValue,
-} from "./sqlite-types";
+} from "./sqlite-types.js";
 
 /**
  * Hooks for encoding parameters and decoding query results.
