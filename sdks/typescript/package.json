@@ -1,11 +1,24 @@
 {
   "name": "@absurd-sqlite/sdk",
-  "version": "0.3.0-alpha.1",
+  "version": "0.3.0-alpha.3",
   "description": "TypeScript SDK for Absurd-SQLite - SQLite-based durable task execution",
+  "type": "module",
   "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc --project tsconfig.build.json && tsc --project tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
+    "build": "node ./scripts/build.mjs",
     "type-check": "tsc --noEmit",
     "prepare": "npm run build",
     "test:prepare": "cd ../../ && cargo build -p absurd-sqlite-extension --release",

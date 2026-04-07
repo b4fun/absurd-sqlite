@@ -8,13 +8,13 @@ import {
   type TaskHandler,
   type TaskRegistrationOptions,
   type WorkerOptions,
-} from "./absurd";
-import { SQLiteConnection } from "./sqlite-connection";
+} from "./absurd.js";
+import { SQLiteConnection } from "./sqlite-connection.js";
 
 // Re-export Temporal from temporal-polyfill
 export { Temporal } from "temporal-polyfill";
 
-export type { Queryable } from "./absurd";
+export type { Queryable } from "./absurd.js";
 export {
   CancelledTask,
   SuspendTask,
@@ -31,12 +31,12 @@ export {
   type TaskHandler,
   type TaskRegistrationOptions,
   type WorkerOptions,
-} from "./absurd";
+} from "./absurd.js";
 export {
   downloadExtension,
   resolveExtensionPath,
   type DownloadExtensionOptions,
-} from "./extension-downloader";
+} from "./extension-downloader.js";
 export type {
   SQLiteBindParams,
   SQLiteBindValue,
@@ -45,9 +45,12 @@ export type {
   SQLiteRestBindParams,
   SQLiteStatement,
   SQLiteVerboseLog,
-} from "./sqlite-types";
-export { SQLiteConnection } from "./sqlite-connection";
-export type { SQLiteConnectionOptions, SQLiteValueCodec } from "./sqlite-connection";
+} from "./sqlite-types.js";
+export { SQLiteConnection } from "./sqlite-connection.js";
+export type {
+  SQLiteConnectionOptions,
+  SQLiteValueCodec,
+} from "./sqlite-connection.js";
 
 /**
  * SQLite-specific Absurd client that loads the extension and owns the database handle.
